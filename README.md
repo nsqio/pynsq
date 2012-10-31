@@ -1,15 +1,15 @@
 ## pynsq
 
-`pynsq` is a Python NSQ client library.
+`pynsq` is the official Python client library for [NSQ][nsq].
 
 It provides a high-level reader library for building consumers and two low-level modules for both
-sync and async communication over the NSQ protocol (if you wanted to write your own high-level
-functionality).
+sync and async communication over the [NSQ][nsq] protocol (if you wanted to write your own
+high-level functionality).
 
 The async module is built on top of the [Tornado IOLoop][tornado] and as such requires `tornado` be
 installed:
 
-`$ pip install tornado`
+    $ pip install tornado
 
 ### Reader
 
@@ -91,4 +91,5 @@ r = nsq.Reader(all_tasks, lookupd_http_addresses=['http://127.0.0.1:4161'],
 nsq.run()
 ```
 
+[nsq]: https://github.com/bitly/nsq
 [tornado]: https://github.com/facebook/tornado
