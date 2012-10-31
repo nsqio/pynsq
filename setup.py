@@ -11,6 +11,7 @@ setup(name='pynsq',
       url='http://github.com/bitly/pynsq',
       download_url='https://github.com/downloads/bitly/pynsq/pynsq-%s.tar.gz' % version,
       packages=['nsq'],
+      requires=['tornado'],
       include_package_data=True,
       zip_safe=True,
       )

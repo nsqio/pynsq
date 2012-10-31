@@ -7,9 +7,11 @@ sync and async communication over the [NSQ][nsq] protocol (if you wanted to writ
 high-level functionality).
 
 The async module is built on top of the [Tornado IOLoop][tornado] and as such requires `tornado` be
-installed:
+installed.
 
-    $ pip install tornado
+### Installation
+
+    $ pip install pynsq
 
 ### Reader
 
