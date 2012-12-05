@@ -49,11 +49,15 @@ def nop():
     return _command('NOP')
 
 def valid_topic_name(topic):
+    if not 0 < len(topic) < 33:
+        return False
     if re.match(r'^[\.a-zA-Z0-9_-]+$', topic):
         return True
     return False
 
 def valid_channel_name(channel):
+    if not 0 < len(channel) < 33:
+        return False
     if re.match(r'^[\.a-zA-Z0-9_-]+(#ephemeral)?$', channel):
         return True
     return False
