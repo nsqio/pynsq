@@ -1,5 +1,10 @@
 import struct
 import re
+try:
+    import simplejson as json
+except ImportError:
+    import json
+
 
 MAGIC_V2 = "  V2"
 NL = "\n"
@@ -28,25 +33,34 @@ def decode_message(data):
     body = data[26:]
     return Message(id, body, timestamp, attempts)
 
-def _command(cmd, *params):
-    return "%s %s%s" % (cmd, ' '.join(params), NL)
+def _command(cmd, body, *params):
+    body_data = ''
+    params_data = ''
+    if body:
+        body_data = struct.pack('>l', len(body)) + body
+    if len(params):
+        params_data = ' ' + ' '.join(params)
+    return "%s%s%s%s" % (cmd, params_data, NL, body_data)
 
-def subscribe(topic, channel, short_id, long_id):
+def subscribe(topic, channel):
     assert valid_topic_name(topic)
     assert valid_channel_name(channel)
-    return _command('SUB', topic, channel, short_id, long_id)
+    return _command('SUB', None, topic, channel)
+
+def identify(data):
+    return _command('IDENTIFY', json.dumps(data))
 
 def ready(count):
-    return _command('RDY', str(count))
+    return _command('RDY', None, str(count))
 
 def finish(id):
-    return _command('FIN', id)
+    return _command('FIN', None, id)
 
 def requeue(id, time_ms):
-    return _command('REQ', id, time_ms)
+    return _command('REQ', None, id, time_ms)
 
 def nop():
-    return _command('NOP')
+    return _command('NOP', None)
 
 def valid_topic_name(topic):
     if not 0 < len(topic) < 33:
