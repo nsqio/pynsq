@@ -1,6 +1,6 @@
 from setuptools import setup
 
-version = '0.3'
+version = '0.3.1'
 
 setup(name='pynsq',
       version=version,
@@ -9,7 +9,7 @@ setup(name='pynsq',
       author='Matt Reiferson',
       author_email='snakes@gmail.com',
       url='http://github.com/bitly/pynsq',
-      download_url='https://github.com/downloads/bitly/pynsq/pynsq-%s.tar.gz' % version,
+      download_url='https://s3.amazonaws.com/bitly-downloads/nsq/pynsq-%s.tar.gz' % version,
       packages=['nsq'],
       requires=['tornado'],
       include_package_data=True,
