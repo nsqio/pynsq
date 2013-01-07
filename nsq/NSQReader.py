@@ -315,7 +315,8 @@ class Reader(object):
             channel = self.channel
         initial_ready = self.connection_max_in_flight()
         try:
-            conn.send(nsq.subscribe(self.topic, channel, self.short_hostname, self.hostname))
+            conn.send(nsq.identify({'short_id': self.short_hostname, 'long_id': self.hostname}))
+            conn.send(nsq.subscribe(self.topic, channel))
             conn.send(nsq.ready(initial_ready))
             conn.ready = initial_ready
             conn.is_sending_ready = False
