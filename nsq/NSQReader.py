@@ -59,6 +59,7 @@ import socket
 import functools
 import urllib
 import random
+import warnings
 
 import tornado.ioloop
 import tornado.httpclient
@@ -175,27 +176,31 @@ class Reader(object):
         delay = random.random() * self.lookupd_poll_interval * .1
         tornado.ioloop.IOLoop.instance().add_timeout(time.time() + delay, periodic.start)
     
-    def _client_callback(self, success, message=None, task=None, conn=None):
+    def _client_callback(self, response, message=None, task=None, conn=None, **kwargs):
         '''
         This is the method that an asynchronous nsqreader should call to indicate
-        async completion of a message. This will most likely be exposed as the finisher
-        callable created in `callback` above with some functools voodoo
+        async completion of a message. This will most likely be exposed as the respond
+        callable in the Message instance with some functools voodoo
         '''
-        if success:
+        if response is nsq.FIN:
             self.backoff_timer[task].success()
             self.finish(conn, message.id)
-        else:
+        elif response is nsq.REQ:
             self.backoff_timer[task].failure()
-            self.requeue(conn, message)
+            self.requeue(conn, message, time_ms=kwargs.get('time_ms', -1))
+        elif response is nsq.TOUCH:
+            self.touch(conn, message.id)
+        else:
+            raise TypeError("invalid NSQ response type: %s" % response)
     
-    def requeue(self, conn, message, delay=True):
+    def requeue(self, conn, message, time_ms=-1):
         if message.attempts > self.max_tries:
             self.giving_up(message)
             return self.finish(conn, message.id)
         
         try:
             # ms
-            requeue_delay = self.requeue_delay * message.attempts if delay else 0
+            requeue_delay = self.requeue_delay * message.attempts if time_ms < 0 else time_ms
             conn.send(nsq.requeue(message.id, str(requeue_delay)))
         except Exception:
             conn.close()
@@ -210,6 +215,13 @@ class Reader(object):
         except Exception:
             conn.close()
             logging.exception('[%s] failed to send finish %s' % (conn, message_id))
+    
+    def touch(self, conn, message_id):
+        try:
+            conn.send(nsq.touch(message_id))
+        except Exception:
+            conn.close()
+            logging.exception('[%s] failed to send touch %s' % (conn, message_id))
     
     def connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
@@ -241,15 +253,23 @@ class Reader(object):
             logging.exception('[%s] caught exception while preprocessing' % conn)
             return self.requeue(conn, message)
         
-        method_callback = self.task_lookup[task]
+        task_method = self.get_task_method(task, message)
         try:
             if self.async:
                 # this handler accepts the finisher callable as a keyword arg
-                finisher = functools.partial(self._client_callback, message=message, task=task, conn=conn)
-                return method_callback(processed_message, finisher=finisher)
+                def finisher(success):
+                    warnings.warn("The finisher callable is deprecated: please call the finish or requeue methods directly on the Message instance",
+                        DeprecationWarning)
+                    RESPONSE_MAP = {
+                        True : nsq.FIN,
+                        False: nsq.REQ
+                    }
+                    response = RESPONSE_MAP[success] if success in RESPONSE_MAP else success
+                    self._client_callback(response, message=message, task=task, conn=conn)
+                return task_method(processed_message, finisher=finisher)
             else:
                 # this is an old-school sync handler, give it just the message
-                if method_callback(processed_message):
+                if task_method(processed_message):
                     self.backoff_timer[task].success()
                     return self.finish(conn, message.id)
                 self.backoff_timer[task].failure()
@@ -260,6 +280,15 @@ class Reader(object):
             self.backoff_timer[task].failure()
         
         return self.requeue(conn, message)
+
+    def get_task_method(self, task, message):
+        '''
+        Returns the method to process this message for this task.
+        You may wish to override or extend this method if you
+        wish to customize how the message is passed to the handler fxn
+        '''
+        return self.task_lookup[task]
+
     
     def send_ready(self, conn, value):
         if self.disabled():
@@ -282,6 +311,7 @@ class Reader(object):
         frame, data  = nsq.unpack_response(raw_data)
         if frame == nsq.FRAME_TYPE_MESSAGE:
             message = nsq.decode_message(data)
+            message.respond = functools.partial(self._client_callback, message=message, task=task, conn=conn)
             try:
                 self.handle_message(conn, task, message)
             except Exception:
