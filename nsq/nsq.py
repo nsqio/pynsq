@@ -13,6 +13,9 @@ FRAME_TYPE_RESPONSE = 0
 FRAME_TYPE_ERROR = 1
 FRAME_TYPE_MESSAGE = 2
 
+TOUCH = '_touch'
+FIN = '_fin'
+REQ = '_req'
 
 class Message(object):
     def __init__(self, id, body, timestamp, attempts):
@@ -20,6 +23,15 @@ class Message(object):
         self.body = body
         self.timestamp = timestamp
         self.attempts = attempts
+    
+    def finish(self):
+        self.respond(FIN)
+    
+    def requeue(self, time_ms=-1):
+        self.respond(REQ, time_ms=time_ms)
+    
+    def touch(self):
+        self.respond(TOUCH)
 
 
 def unpack_response(data):
@@ -58,6 +70,9 @@ def finish(id):
 
 def requeue(id, time_ms):
     return _command('REQ', None, id, time_ms)
+
+def touch(id):
+    return _command('TOUCH', id)
 
 def nop():
     return _command('NOP', None)
