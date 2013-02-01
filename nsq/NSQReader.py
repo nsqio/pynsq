@@ -123,6 +123,9 @@ class Reader(object):
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and 0 < max_in_flight < 2500
         
+        if async:
+            warnings.warn("async=True is deprecated: for now, this enables legacy support for passing of the finisher callable to message handlers", DeprecationWarning)
+        
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
                 assert isinstance(nsqd_tcp_addresses, (str, unicode))
@@ -184,19 +187,20 @@ class Reader(object):
         '''
         if response is nsq.FIN:
             self.backoff_timer[task].success()
-            self.finish(conn, message.id)
+            self.finish(conn, message)
         elif response is nsq.REQ:
-            self.backoff_timer[task].failure()
+            if kwargs.get('backoff', True):
+                self.backoff_timer[task].failure()
             self.requeue(conn, message, time_ms=kwargs.get('time_ms', -1))
         elif response is nsq.TOUCH:
-            self.touch(conn, message.id)
+            self.touch(conn, message)
         else:
             raise TypeError("invalid NSQ response type: %s" % response)
     
     def requeue(self, conn, message, time_ms=-1):
         if message.attempts > self.max_tries:
             self.giving_up(message)
-            return self.finish(conn, message.id)
+            return self.finish(conn, message)
         
         try:
             # ms
@@ -206,22 +210,22 @@ class Reader(object):
             conn.close()
             logging.exception('[%s] failed to send requeue %s @ %d' % (conn, message.id, requeue_delay))
     
-    def finish(self, conn, message_id):
+    def finish(self, conn, message):
         '''
         This is an internal method for NSQReader
         '''
         try:
-            conn.send(nsq.finish(message_id))
+            conn.send(nsq.finish(message.id))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send finish %s' % (conn, message_id))
+            logging.exception('[%s] failed to send finish %s' % (conn, message.id))
     
-    def touch(self, conn, message_id):
+    def touch(self, conn, message):
         try:
-            conn.send(nsq.touch(message_id))
+            conn.send(nsq.touch(message.id))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send touch %s' % (conn, message_id))
+            logging.exception('[%s] failed to send touch %s' % (conn, message.id))
     
     def connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
@@ -246,49 +250,44 @@ class Reader(object):
                 self.send_ready(conn, per_conn)
         
         try:
-            processed_message = self.preprocess_message(message)
-            if not self.validate_message(processed_message):
-                return self.finish(conn, message.id)
+            pre_processed_message = self.preprocess_message(message)
+            if not self.validate_message(pre_processed_message):
+                return message.finish()
         except Exception:
             logging.exception('[%s] caught exception while preprocessing' % conn)
-            return self.requeue(conn, message)
+            return message.requeue()
         
+        success = False
         task_method = self.get_task_method(task, message)
         try:
             if self.async:
-                # this handler accepts the finisher callable as a keyword arg
+                # legacy mode - this handler accepts the finisher callable as a keyword arg
                 def finisher(success):
-                    warnings.warn("The finisher callable is deprecated: please call the finish or requeue methods directly on the Message instance",
-                        DeprecationWarning)
+                    warnings.warn("The finisher callable is deprecated: please call the finish or requeue methods directly on the Message instance", DeprecationWarning)
                     RESPONSE_MAP = {
                         True : nsq.FIN,
                         False: nsq.REQ
                     }
                     response = RESPONSE_MAP[success] if success in RESPONSE_MAP else success
                     self._client_callback(response, message=message, task=task, conn=conn)
-                return task_method(processed_message, finisher=finisher)
-            else:
-                # this is an old-school sync handler, give it just the message
-                if task_method(processed_message):
-                    self.backoff_timer[task].success()
-                    return self.finish(conn, message.id)
-                self.backoff_timer[task].failure()
+                return task_method(pre_processed_message, finisher=finisher)
+            
+            success = task_method(pre_processed_message)
         except RequeueWithoutBackoff:
-            logging.info('RequeueWithoutBackoff')
+            warnings.warn("RequeueWithoutBackoff is deprecated: please use the message instance methods if you want to requeue without backing off", DeprecationWarning)
+            if not message.has_responded():
+                return message.requeue(backoff=False)
         except Exception:
             logging.exception('[%s] caught exception while handling %s' % (conn, task))
-            self.backoff_timer[task].failure()
+            if not message.has_responded():
+                return message.requeue()
         
-        return self.requeue(conn, message)
-
-    def get_task_method(self, task, message):
-        '''
-        Returns the method to process this message for this task.
-        You may wish to override or extend this method if you
-        wish to customize how the message is passed to the handler fxn
-        '''
-        return self.task_lookup[task]
-
+        if not message.is_async() and not message.has_responded():
+            assert success is not None, "ambiguous return value for synchronous mode"
+            if success:
+                return message.finish()
+            else:
+                return message.requeue()
     
     def send_ready(self, conn, value):
         if self.disabled():
@@ -409,6 +408,14 @@ class Reader(object):
     #
     # subclass overwriteable
     #
+    
+    def get_task_method(self, task, message):
+        '''
+        Returns the method to process this message for this task.
+        You may wish to override or extend this method if you
+        wish to customize how the message is passed to the handler fxn
+        '''
+        return self.task_lookup[task]
     
     def giving_up(self, message):
         logging.warning("giving up on message '%s' after max tries %d", message.id, self.max_tries)
