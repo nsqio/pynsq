@@ -29,15 +29,16 @@ async ex.
     
     buf = []
     
-    def process_message(message, finisher):
+    def process_message(message):
         global buf
-         # cache both the message and the finisher callable for later processing
-        buf.append((message, finisher))
+        message.enable_async()
+        # cache the message for later processing
+        buf.append(message)
         if len(buf) >= 3:
             print '****'
-            for msg, finish_fxn in buf:
+            for msg in buf:
                 print msg
-                finish_fxn(True) # use finish_fxn to tell NSQ of success
+                msg.finish()
             print '****'
             buf = []
         else:
@@ -45,7 +46,7 @@ async ex.
     
     all_tasks = {"task1": process_message}
     r = nsq.Reader(all_tasks, lookupd_http_addresses=['http://127.0.0.1:4161'],
-            topic="nsq_reader", channel="async", async=True)
+            topic="nsq_reader", channel="async", max_in_flight=9)
     nsq.run()
 """
 import logging
@@ -100,9 +101,9 @@ class Reader(object):
         ``lookupd_http_addresses`` a sequence of string addresses of the nsqlookupd instances this
             reader should query for producers of the specified topic
         
-        ``async`` determines whether handlers will do asynchronous processing. If set to True,
-            handlers must accept a keyword argument called ``finisher`` that will be a callable used
-            to signal message completion, taking a boolean argument indicating success.
+        ``async`` **deprecated in 0.3.2** determines whether handlers will do asynchronous processing. 
+            If set to True, handlers must accept a keyword argument called ``finisher`` that will be 
+            a callable used to signal message completion, taking a boolean argument indicating success.
         
         ``max_tries`` the maximum number of attempts the reader will make to process a message after
             which messages will be automatically discarded
