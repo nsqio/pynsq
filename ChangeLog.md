@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3-alpha
+
+ * #6 - fix TOUCH; deprecate `async=True` in favor of always using message instance methods
+
+## 0.3.2 - 2013-01-31
+
+ * #4 - TOUCH support; new message response API (deprecates `finisher`)
+
 ## 0.3.1 - 2013-01-07
 
  * #5 - add/use IDENTIFY

@@ -17,20 +17,37 @@ TOUCH = '_touch'
 FIN = '_fin'
 REQ = '_req'
 
+
 class Message(object):
     def __init__(self, id, body, timestamp, attempts):
+        self._async_enabled = False
+        self._has_responded = False
         self.id = id
         self.body = body
         self.timestamp = timestamp
         self.attempts = attempts
     
+    def enable_async(self):
+        self._async_enabled = True
+    
+    def is_async(self):
+        return self._async_enabled
+    
+    def has_responded(self):
+        return self._has_responded
+    
     def finish(self):
+        assert not self._has_responded
+        self._has_responded = True
         self.respond(FIN)
     
-    def requeue(self, time_ms=-1):
-        self.respond(REQ, time_ms=time_ms)
+    def requeue(self, **kwargs):
+        assert not self._has_responded
+        self._has_responded = True
+        self.respond(REQ, **kwargs)
     
     def touch(self):
+        assert not self._has_responded
         self.respond(TOUCH)
 
 
@@ -72,7 +89,7 @@ def requeue(id, time_ms):
     return _command('REQ', None, id, time_ms)
 
 def touch(id):
-    return _command('TOUCH', id)
+    return _command('TOUCH', None, id)
 
 def nop():
     return _command('NOP', None)
