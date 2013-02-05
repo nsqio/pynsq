@@ -337,6 +337,7 @@ class Reader(object):
         conn = async.AsyncConn(address, port, connect_callback, data_callback, close_callback)
         conn.connect()
         self.conns[conn_id] = conn
+        self.last_recv_timestamps[conn_id] = time.time()
     
     def _connect_callback(self, conn, task):
         if len(self.task_lookup) > 1:
@@ -344,6 +345,7 @@ class Reader(object):
         else:
             channel = self.channel
         initial_ready = self.connection_max_in_flight()
+        
         try:
             conn.send(nsq.identify({'short_id': self.short_hostname, 'long_id': self.hostname}))
             conn.send(nsq.subscribe(self.topic, channel))
