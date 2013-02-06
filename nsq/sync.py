@@ -35,16 +35,3 @@ class SyncConn(object):
     
     def send(self, data):
         self.s.send(data)
-
-
-if __name__ == '__main__':
-    c = SyncConn()
-    c.connect("127.0.0.1", 4150)
-    c.send(nsq.subscribe('test', 'ch', 'a', 'b'))
-    for i in xrange(10):
-        c.send(nsq.ready(1))
-        resp = c.read_response()
-        unpacked = nsq.unpack_response(resp)
-        msg = nsq.decode_message(unpacked[1])
-        print msg.id, msg.body
-        c.send(nsq.finish(msg.id))
