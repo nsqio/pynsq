@@ -36,6 +36,9 @@ class MockSocket:
     def close(self):
         pass
 
+    def setblocking(self, val):
+        pass
+
 
 def socket(family=None, type=None, proto=None):
     return MockSocket()
