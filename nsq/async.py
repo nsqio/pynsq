@@ -3,6 +3,7 @@ import struct
 import logging
 
 import tornado.iostream
+import tornado.ioloop
 
 import nsq
 
@@ -83,26 +84,3 @@ class AsyncConn(object):
     
     def __str__(self):
         return self.host + ':' + str(self.port)
-
-
-if __name__ == '__main__':
-    def connect_callback(c):
-        print "connected"
-        c.send(nsq.subscribe('test', 'ch', 'a', 'b'))
-        c.send(nsq.ready(1))
-    
-    def close_callback(c):
-        print "connection closed"
-    
-    def data_callback(c, data):
-        unpacked = nsq.unpack_response(data)
-        if unpacked[0] == nsq.FRAME_TYPE_MESSAGE:
-            c.send(nsq.ready(1))
-            msg = nsq.decode_message(unpacked[1])
-            print msg.id, msg.body
-            c.send(nsq.finish(msg.id))
-    
-    c = AsyncConn("127.0.0.1", 4150, connect_callback, data_callback, close_callback)
-    c.connect()
-    
-    tornado.ioloop.IOLoop.instance().start()

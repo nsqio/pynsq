@@ -3,7 +3,7 @@ import re
 try:
     import simplejson as json
 except ImportError:
-    import json
+    import json # pyflakes.ignore
 
 
 MAGIC_V2 = "  V2"
@@ -80,13 +80,16 @@ def identify(data):
     return _command('IDENTIFY', json.dumps(data))
 
 def ready(count):
+    assert isinstance(count, int), "ready count must be an integer"
+    assert count > 0, "ready count cannot be negative"
     return _command('RDY', None, str(count))
 
 def finish(id):
     return _command('FIN', None, id)
 
-def requeue(id, time_ms):
-    return _command('REQ', None, id, time_ms)
+def requeue(id, time_ms=0):
+    assert isinstance(time_ms, int), "requeue time_ms must be an integer"
+    return _command('REQ', None, id, str(time_ms))
 
 def touch(id):
     return _command('TOUCH', None, id)

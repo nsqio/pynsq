@@ -2,6 +2,8 @@
 
 `pynsq` is the official Python client library for [NSQ][nsq].
 
+[![Build Status](https://secure.travis-ci.org/bitly/pynsq.png)](http://travis-ci.org/bitly/pynsq)
+
 It provides a high-level reader library for building consumers and two low-level modules for both
 sync and async communication over the [NSQ][nsq] protocol (if you wanted to write your own
 high-level functionality).
