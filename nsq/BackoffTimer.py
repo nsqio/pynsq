@@ -42,27 +42,3 @@ class BackoffTimer(object):
     
     def get_interval(self):
         return float(self.min_interval + self.short_interval + self.long_interval)
-
-
-def test_timer():
-    timer = BackoffTimer(.1, 120, long_length=1000)
-    assert timer.get_interval() == .1
-    timer.success()
-    assert timer.get_interval() == .1
-    timer.failure()
-    interval = '%0.2f' % timer.get_interval()
-    assert interval == '3.19'
-    assert timer.min_interval == Decimal('.1')
-    assert timer.short_interval == Decimal('2.9975')
-    assert timer.long_interval == Decimal('0.089925')
-    
-    timer.failure()
-    interval = '%0.2f' % timer.get_interval()
-    assert interval == '6.27'
-    timer.success()
-    interval = '%0.2f' % timer.get_interval()
-    assert interval == '3.19'
-    for i in range(25):
-        timer.failure()
-    interval = '%0.2f' % timer.get_interval()
-    assert interval == '32.41'
