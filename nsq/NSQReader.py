@@ -78,7 +78,8 @@ class RequeueWithoutBackoff(Exception):
 class Reader(object):
     def __init__(self, all_tasks, topic, channel,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None, async=False,
-                max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120):
+                max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120,
+                low_rdy_idle_timeout=10):
         """
         Reader receives messages over the specified ``topic/channel`` and provides an async loop
         that calls each task method provided by ``all_tasks`` up to ``max_tries``.
@@ -150,6 +151,8 @@ class Reader(object):
         self.requeue_delay = int(requeue_delay * 1000)
         self.max_tries = max_tries
         self.max_in_flight = max_in_flight
+        self.low_rdy_idle_timeout = low_rdy_idle_timeout
+        self.total_ready = 0
         self.lookupd_poll_interval = lookupd_poll_interval
         self.async = async
         
@@ -161,7 +164,6 @@ class Reader(object):
         self.short_hostname = self.hostname.split('.')[0]
         self.conns = {}
         self.http_client = tornado.httpclient.AsyncHTTPClient()
-        self.last_recv_timestamps = {}
         
         logging.info("starting reader for topic '%s'..." % self.topic)
         
@@ -173,6 +175,7 @@ class Reader(object):
         # trigger the first one manually
         self.query_lookupd()
         
+        tornado.ioloop.PeriodicCallback(self.redistribute_ready_state, 5 * 1000).start()
         tornado.ioloop.PeriodicCallback(self.check_last_recv_timestamps, 60 * 1000).start()
         periodic = tornado.ioloop.PeriodicCallback(self.query_lookupd, self.lookupd_poll_interval * 1000)
         # randomize the time we start this poll loop so that all servers don't query at exactly the same time
@@ -232,21 +235,21 @@ class Reader(object):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
     
     def handle_message(self, conn, task, message):
-        conn.ready -= 1
+        conn.ready = max(conn.ready - 1, 0)
+        self.total_ready = max(self.total_ready - 1, 0)
         
         # update ready count if necessary...
         # if we're in a backoff state for this task
         # set a timer to actually send the ready update
         per_conn = self.connection_max_in_flight()
-        if not conn.is_sending_ready and (conn.ready <= 1 or conn.ready < int(per_conn * 0.25)):
+        if not conn.rdy_timeout and (conn.ready <= 1 or conn.ready < int(per_conn * 0.25)):
             backoff_interval = self.backoff_timer[task].get_interval()
             if self.disabled():
                 backoff_interval = 15
             if backoff_interval > 0:
-                conn.is_sending_ready = True
                 logging.info('[%s] backing off for %0.2f seconds' % (conn, backoff_interval))
                 send_ready_callback = functools.partial(self.send_ready, conn, per_conn)
-                tornado.ioloop.IOLoop.instance().add_timeout(time.time() + backoff_interval, send_ready_callback)
+                conn.rdy_timeout = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + backoff_interval, send_ready_callback)
             else:
                 self.send_ready(conn, per_conn)
         
@@ -294,7 +297,12 @@ class Reader(object):
         if self.disabled():
             logging.info('[%s] disabled, delaying ready state change', conn)
             send_ready_callback = functools.partial(self.send_ready, conn, value)
-            tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, send_ready_callback)
+            conn.rdy_timeout = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, send_ready_callback)
+            return
+        
+        conn.rdy_timeout = None
+        
+        if (self.total_ready + value) > self.max_in_flight:
             return
         
         try:
@@ -303,13 +311,12 @@ class Reader(object):
         except Exception:
             conn.close()
             logging.exception('[%s] failed to send ready' % conn)
-        
-        conn.is_sending_ready = False
     
     def _data_callback(self, conn, raw_data, task):
-        self.last_recv_timestamps[get_conn_id(conn, task)] = time.time()
+        conn.last_recv_timestamp = time.time()
         frame, data  = nsq.unpack_response(raw_data)
         if frame == nsq.FRAME_TYPE_MESSAGE:
+            conn.last_msg_timestamp = time.time()
             message = nsq.decode_message(data)
             message.respond = functools.partial(self._client_callback, message=message, task=task, conn=conn)
             try:
@@ -336,31 +343,39 @@ class Reader(object):
         
         conn = async.AsyncConn(address, port, connect_callback, data_callback, close_callback)
         conn.connect()
+        
+        conn.rdy_timeout = None
+        conn.last_recv_timestamp = time.time()
+        conn.last_msg_timestamp = time.time()
+        
+        initial_ready = self.connection_max_in_flight()
+        if self.total_ready + initial_ready > self.max_in_flight:
+            initial_ready = 0
+        conn.ready = initial_ready
+        self.total_ready += initial_ready
+        
         self.conns[conn_id] = conn
-        self.last_recv_timestamps[conn_id] = time.time()
     
     def _connect_callback(self, conn, task):
         if len(self.task_lookup) > 1:
             channel = self.channel + '.' + task
         else:
             channel = self.channel
-        initial_ready = self.connection_max_in_flight()
         
         try:
             conn.send(nsq.identify({'short_id': self.short_hostname, 'long_id': self.hostname}))
             conn.send(nsq.subscribe(self.topic, channel))
-            conn.send(nsq.ready(initial_ready))
-            conn.ready = initial_ready
-            conn.is_sending_ready = False
+            conn.send(nsq.ready(conn.ready))
         except Exception:
             conn.close()
             logging.exception('[%s] failed to bootstrap connection' % conn)
     
     def _close_callback(self, conn, task):
         conn_id = get_conn_id(conn, task)
-        
         if conn_id in self.conns:
             del self.conns[conn_id]
+        
+        self.total_ready = max(self.total_ready - conn.ready, 0)
         
         logging.warning("[%s] connection closed... %d left open", conn, len(self.conns))
         
@@ -393,18 +408,42 @@ class Reader(object):
         
         for task in self.task_lookup:
             for producer in lookup_data['data']['producers']:
-                self.connect_to_nsqd(producer['address'], producer['tcp_port'], task)
+                # TODO: this can be dropped for 1.0
+                address = producer.get('broadcast_address', producer.get('address'))
+                assert address
+                self.connect_to_nsqd(address, producer['tcp_port'], task)
     
     def check_last_recv_timestamps(self):
         now = time.time()
-        for conn_id, conn in dict(self.conns).iteritems():
-            timestamp = self.last_recv_timestamps.get(conn_id, 0)
+        for conn_id, conn in self.conns.iteritems():
+            timestamp = conn.last_recv_timestamp
             if (now - timestamp) > 60:
                 # this connection hasnt received data beyond
                 # the normal heartbeat interval, close it
                 logging.warning("[%s] connection is stale, closing", conn)
-                conn = self.conns[conn_id]
                 conn.close()
+    
+    def redistribute_ready_state(self):
+        if self.disabled():
+            return
+        
+        if len(self.conns) > self.max_in_flight:
+            logging.debug('redistributing ready state (%d conns > %d max_in_flight)', len(self.conns), self.max_in_flight)
+            for conn_id, conn in self.conns.iteritems():
+                last_message_duration = time.time() - conn.last_msg_timestamp
+                logging.debug('[%s] rdy: %d (last message received %.02fs)', conn, conn.ready, last_message_duration)
+                if conn.ready > 0 and last_message_duration > self.low_rdy_idle_timeout:
+                    logging.info('[%s] idle connection, giving up RDY count', conn)
+                    self.total_ready = max(self.total_ready - conn.ready, 0)
+                    self.send_ready(conn, 0)
+            
+            possible_conns = self.conns.values()
+            max_in_flight = self.max_in_flight - self.total_ready
+            while possible_conns and max_in_flight:
+                max_in_flight -= 1
+                conn = possible_conns.pop(random.randrange(len(possible_conns)))
+                logging.info('[%s] redistributing RDY', conn)
+                self.send_ready(conn, 1)
     
     #
     # subclass overwriteable
