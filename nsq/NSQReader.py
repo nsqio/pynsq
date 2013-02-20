@@ -53,7 +53,7 @@ import logging
 try:
     import simplejson as json
 except ImportError:
-    import json
+    import json # pyflakes.ignore
 import time
 import signal
 import socket
@@ -206,7 +206,7 @@ class Reader(object):
         try:
             # ms
             requeue_delay = self.requeue_delay * message.attempts if time_ms < 0 else time_ms
-            conn.send(nsq.requeue(message.id, str(requeue_delay)))
+            conn.send(nsq.requeue(message.id, requeue_delay))
         except Exception:
             conn.close()
             logging.exception('[%s] failed to send requeue %s @ %d' % (conn, message.id, requeue_delay))
