@@ -6,7 +6,7 @@ from sync import SyncConn
 from async import AsyncConn
 from NSQReader import Reader, RequeueWithoutBackoff, run
 
-__version__ = '0.3.3-alpha'
+__version__ = '0.3.4'
 __author__ = "Matt Reiferson <snakes@gmail.com>"
 __all__ = ["Reader", "RequeueWithoutBackoff", "run", "BackoffTimer",
            "SyncConn", "AsyncConn", "unpack_response", "decode_message", 

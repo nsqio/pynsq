@@ -1,7 +1,9 @@
 # Changelog
 
-## 0.3.3-alpha
-
+## 0.3.4 - 2013-02-20
+ 
+ * #10 - fix parameter type for REQ
+ * #8 - add tests
  * #6 - fix TOUCH; deprecate `async=True` in favor of always using message instance methods
 
 ## 0.3.2 - 2013-01-31
