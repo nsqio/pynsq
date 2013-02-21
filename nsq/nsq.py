@@ -81,7 +81,7 @@ def identify(data):
 
 def ready(count):
     assert isinstance(count, int), "ready count must be an integer"
-    assert count > 0, "ready count cannot be negative"
+    assert count >= 0, "ready count cannot be negative"
     return _command('RDY', None, str(count))
 
 def finish(id):
