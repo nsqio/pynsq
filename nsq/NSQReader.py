@@ -327,21 +327,21 @@ class Reader(object):
             self.heartbeat(conn)
             conn.send(nsq.nop())
     
-    def connect_to_nsqd(self, address, port, task):
-        assert isinstance(address, (str, unicode))
+    def connect_to_nsqd(self, host, port, task):
+        assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         
-        conn_id = address + ':' + str(port) + ':' + task
+        conn_id = host + ':' + str(port) + ':' + task
         if conn_id in self.conns:
             return
         
-        logging.info("[%s] connecting to nsqd for '%s'", address + ':' + str(port), task)
+        logging.info("[%s] connecting to nsqd for task '%s'", host + ':' + str(port), task)
         
         connect_callback = functools.partial(self._connect_callback, task=task)
         data_callback = functools.partial(self._data_callback, task=task)
         close_callback = functools.partial(self._close_callback, task=task)
         
-        conn = async.AsyncConn(address, port, connect_callback, data_callback, close_callback)
+        conn = async.AsyncConn(host, port, connect_callback, data_callback, close_callback)
         conn.connect()
         
         conn.rdy_timeout = None
@@ -377,11 +377,14 @@ class Reader(object):
         
         self.total_ready = max(self.total_ready - conn.ready, 0)
         
-        logging.warning("[%s] connection closed... %d left open", conn, len(self.conns))
+        logging.warning("[%s] connection closed for task '%s'", conn, task)
         
-        if len(self.conns) == 0 and len(self.lookupd_http_addresses) == 0:
-            logging.warning("all connections closed and no lookupds... exiting")
-            tornado.ioloop.IOLoop.instance().stop()
+        if len(self.lookupd_http_addresses) == 0:
+            # automatically reconnect to nsqd addresses when not using lookupd
+            logging.info("[%s] attempting to reconnect in 15s", conn)
+            reconnect_callback = functools.partial(self.connect_to_nsqd, 
+                host=conn.host, port=conn.port, task=task)
+            tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, reconnect_callback)
     
     def query_lookupd(self):
         for endpoint in self.lookupd_http_addresses:
