@@ -60,7 +60,6 @@ import socket
 import functools
 import urllib
 import random
-import warnings
 
 import tornado.ioloop
 import tornado.httpclient
@@ -70,14 +69,9 @@ import nsq
 import async
 
 
-class RequeueWithoutBackoff(Exception):
-    """exception for requeueing a message without incrementing backoff"""
-    pass
-
-
 class Reader(object):
     def __init__(self, all_tasks, topic, channel,
-                nsqd_tcp_addresses=None, lookupd_http_addresses=None, async=False,
+                nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                 max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120,
                 low_rdy_idle_timeout=10):
         """
@@ -102,10 +96,6 @@ class Reader(object):
         ``lookupd_http_addresses`` a sequence of string addresses of the nsqlookupd instances this
             reader should query for producers of the specified topic
         
-        ``async`` **deprecated in 0.3.2** determines whether handlers will do asynchronous processing. 
-            If set to True, handlers must accept a keyword argument called ``finisher`` that will be 
-            a callable used to signal message completion, taking a boolean argument indicating success.
-        
         ``max_tries`` the maximum number of attempts the reader will make to process a message after
             which messages will be automatically discarded
         
@@ -124,9 +114,6 @@ class Reader(object):
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and 0 < max_in_flight < 2500
-        
-        if async:
-            warnings.warn("async=True is deprecated: for now, this enables legacy support for passing of the finisher callable to message handlers", DeprecationWarning)
         
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
@@ -154,7 +141,6 @@ class Reader(object):
         self.low_rdy_idle_timeout = low_rdy_idle_timeout
         self.total_ready = 0
         self.lookupd_poll_interval = lookupd_poll_interval
-        self.async = async
         
         self.task_lookup = all_tasks
         
@@ -215,9 +201,6 @@ class Reader(object):
             logging.exception('[%s] failed to send requeue %s @ %d' % (conn, message.id, requeue_delay))
     
     def finish(self, conn, message):
-        '''
-        This is an internal method for NSQReader
-        '''
         try:
             conn.send(nsq.finish(message.id))
         except Exception:
@@ -262,25 +245,8 @@ class Reader(object):
             return message.requeue()
         
         success = False
-        task_method = self.get_task_method(task, message)
         try:
-            if self.async:
-                # legacy mode - this handler accepts the finisher callable as a keyword arg
-                def finisher(success):
-                    warnings.warn("The finisher callable is deprecated: please call the finish or requeue methods directly on the Message instance", DeprecationWarning)
-                    RESPONSE_MAP = {
-                        True : nsq.FIN,
-                        False: nsq.REQ
-                    }
-                    response = RESPONSE_MAP[success] if success in RESPONSE_MAP else success
-                    self._client_callback(response, message=message, task=task, conn=conn)
-                return task_method(pre_processed_message, finisher=finisher)
-            
-            success = task_method(pre_processed_message)
-        except RequeueWithoutBackoff:
-            warnings.warn("RequeueWithoutBackoff is deprecated: please use the message instance methods if you want to requeue without backing off", DeprecationWarning)
-            if not message.has_responded():
-                return message.requeue(backoff=False)
+            success = self.process_message(task, message)
         except Exception:
             logging.exception('[%s] caught exception while handling %s' % (conn, task))
             if not message.has_responded():
@@ -290,8 +256,7 @@ class Reader(object):
             assert success is not None, "ambiguous return value for synchronous mode"
             if success:
                 return message.finish()
-            else:
-                return message.requeue()
+            return message.requeue()
     
     def send_ready(self, conn, value):
         if self.disabled():
@@ -452,13 +417,14 @@ class Reader(object):
     # subclass overwriteable
     #
     
-    def get_task_method(self, task, message):
-        '''
-        Returns the method to process this message for this task.
-        You may wish to override or extend this method if you
-        wish to customize how the message is passed to the handler fxn
-        '''
-        return self.task_lookup[task]
+    def process_message(self, task, message):
+        """
+        identifies the task method and calls the task.
+        this is useful to override if you want to change 
+        how your task methods are called
+        """
+        task_method = self.task_lookup[task]
+        return task_method(message)
     
     def giving_up(self, message):
         logging.warning("giving up on message '%s' after max tries %d", message.id, self.max_tries)
@@ -478,11 +444,3 @@ class Reader(object):
 
 def get_conn_id(conn, task):
     return str(conn) + ':' + task
-
-def _handle_term_signal(sig_num, frame):
-    logging.info('TERM Signal handler called with signal %r' % sig_num)
-    tornado.ioloop.IOLoop.instance().stop()
-
-def run():
-    signal.signal(signal.SIGTERM, _handle_term_signal)
-    tornado.ioloop.IOLoop.instance().start()
