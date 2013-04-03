@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0-alpha
+
+  #15 - run travis tests on more tornado versions
+  #14 - automatically reconnect to nsqd when not using lookupd
+  #12 - cleanup/remove deprecated async=True
+  #9 - redistribute ready state when max_in_flight < num_conns
+
 ## 0.3.4 - 2013-02-20
  
  * #10 - fix parameter type for REQ
