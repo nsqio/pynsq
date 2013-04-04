@@ -1,7 +1,9 @@
 # Changelog
 
-## 0.4.0-alpha
+## 0.4.0-alpha3
 
+  #17 - add task to all connection related logging; ensure max_in_flight is never < # tasks
+  #16 - always set initial RDY count to 1
   #15 - run travis tests on more tornado versions
   #14 - automatically reconnect to nsqd when not using lookupd
   #12 - cleanup/remove deprecated async=True
