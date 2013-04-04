@@ -197,21 +197,21 @@ class Reader(object):
             conn.send(nsq.requeue(message.id, requeue_delay))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send requeue %s @ %d' % (conn, message.id, requeue_delay))
+            logging.exception('[%s] failed to send requeue %s @ %d' % (conn.id, message.id, requeue_delay))
     
     def finish(self, conn, message):
         try:
             conn.send(nsq.finish(message.id))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send finish %s' % (conn, message.id))
+            logging.exception('[%s] failed to send finish %s' % (conn.id, message.id))
     
     def touch(self, conn, message):
         try:
             conn.send(nsq.touch(message.id))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send touch %s' % (conn, message.id))
+            logging.exception('[%s] failed to send touch %s' % (conn.id, message.id))
     
     def connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
@@ -229,7 +229,7 @@ class Reader(object):
             if self.disabled():
                 backoff_interval = 15
             if backoff_interval > 0:
-                logging.info('[%s] backing off for %0.2f seconds' % (conn, backoff_interval))
+                logging.info('[%s] backing off for %0.2f seconds' % (conn.id, backoff_interval))
                 send_ready_callback = functools.partial(self.send_ready, conn, per_conn)
                 conn.rdy_timeout = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + backoff_interval, send_ready_callback)
             else:
@@ -240,14 +240,14 @@ class Reader(object):
             if not self.validate_message(pre_processed_message):
                 return message.finish()
         except Exception:
-            logging.exception('[%s] caught exception while preprocessing' % conn)
+            logging.exception('[%s] caught exception while preprocessing' % conn.id)
             return message.requeue()
         
         success = False
         try:
             success = self.process_message(task, message)
         except Exception:
-            logging.exception('[%s] caught exception while handling %s' % (conn, task))
+            logging.exception('[%s] caught exception while handling message' % conn.id)
             if not message.has_responded():
                 return message.requeue()
         
@@ -259,7 +259,7 @@ class Reader(object):
     
     def send_ready(self, conn, value):
         if self.disabled():
-            logging.info('[%s] disabled, delaying ready state change', conn)
+            logging.info('[%s] disabled, delaying ready state change', conn.id)
             send_ready_callback = functools.partial(self.send_ready, conn, value)
             conn.rdy_timeout = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, send_ready_callback)
             return
@@ -274,7 +274,7 @@ class Reader(object):
             conn.ready = value
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send ready' % conn)
+            logging.exception('[%s] failed to send ready' % conn.id)
     
     def _data_callback(self, conn, raw_data, task):
         conn.last_recv_timestamp = time.time()
@@ -286,7 +286,7 @@ class Reader(object):
             try:
                 self.handle_message(conn, task, message)
             except Exception:
-                logging.exception('[%s] failed to handle_message() %r' % (conn, message))
+                logging.exception('[%s] failed to handle_message() %r' % (conn.id, message))
         elif frame == nsq.FRAME_TYPE_RESPONSE and data == "_heartbeat_":
             self.heartbeat(conn)
             conn.send(nsq.nop())
@@ -299,7 +299,7 @@ class Reader(object):
         if conn_id in self.conns:
             return
         
-        logging.info("[%s] connecting to nsqd for task '%s'", host + ':' + str(port), task)
+        logging.info("[%s] connecting to nsqd", conn_id)
         
         connect_callback = functools.partial(self._connect_callback, task=task)
         data_callback = functools.partial(self._data_callback, task=task)
@@ -308,6 +308,8 @@ class Reader(object):
         conn = async.AsyncConn(host, port, connect_callback, data_callback, close_callback)
         conn.connect()
         
+        conn.id = conn_id
+        conn.task = task
         conn.rdy_timeout = None
         conn.last_recv_timestamp = time.time()
         conn.last_msg_timestamp = time.time()
@@ -338,20 +340,19 @@ class Reader(object):
             conn.send(nsq.ready(conn.ready))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to bootstrap connection' % conn)
+            logging.exception('[%s] failed to bootstrap connection' % conn.id)
     
     def _close_callback(self, conn, task):
-        conn_id = get_conn_id(conn, task)
-        if conn_id in self.conns:
-            del self.conns[conn_id]
+        if conn.id in self.conns:
+            del self.conns[conn.id]
         
         self.total_ready = max(self.total_ready - conn.ready, 0)
         
-        logging.warning("[%s] connection closed for task '%s'", conn, task)
+        logging.warning("[%s] connection closed for task '%s'", conn.id, task)
         
         if len(self.lookupd_http_addresses) == 0:
             # automatically reconnect to nsqd addresses when not using lookupd
-            logging.info("[%s] attempting to reconnect in 15s", conn)
+            logging.info("[%s] attempting to reconnect in 15s", conn.id)
             reconnect_callback = functools.partial(self.connect_to_nsqd, 
                 host=conn.host, port=conn.port, task=task)
             tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, reconnect_callback)
@@ -393,7 +394,7 @@ class Reader(object):
             if (now - timestamp) > 60:
                 # this connection hasnt received data beyond
                 # the normal heartbeat interval, close it
-                logging.warning("[%s] connection is stale, closing", conn)
+                logging.warning("[%s] connection is stale, closing", conn.id)
                 conn.close()
     
     def redistribute_ready_state(self):
@@ -404,9 +405,9 @@ class Reader(object):
             logging.debug('redistributing ready state (%d conns > %d max_in_flight)', len(self.conns), self.max_in_flight)
             for conn_id, conn in self.conns.iteritems():
                 last_message_duration = time.time() - conn.last_msg_timestamp
-                logging.debug('[%s] rdy: %d (last message received %.02fs)', conn, conn.ready, last_message_duration)
+                logging.debug('[%s] rdy: %d (last message received %.02fs)', conn.id, conn.ready, last_message_duration)
                 if conn.ready > 0 and last_message_duration > self.low_rdy_idle_timeout:
-                    logging.info('[%s] idle connection, giving up RDY count', conn)
+                    logging.info('[%s] idle connection, giving up RDY count', conn.id)
                     self.total_ready = max(self.total_ready - conn.ready, 0)
                     self.send_ready(conn, 0)
             
@@ -415,7 +416,7 @@ class Reader(object):
             while possible_conns and max_in_flight:
                 max_in_flight -= 1
                 conn = possible_conns.pop(random.randrange(len(possible_conns)))
-                logging.info('[%s] redistributing RDY', conn)
+                logging.info('[%s] redistributing RDY', conn.id)
                 self.send_ready(conn, 1)
     
     #
@@ -445,7 +446,3 @@ class Reader(object):
     
     def preprocess_message(self, message):
         return message
-
-
-def get_conn_id(conn, task):
-    return str(conn) + ':' + task
