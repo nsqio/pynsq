@@ -1,6 +1,6 @@
 from setuptools import setup
 
-version = '0.4.0-alpha'
+version = '0.4.0-alpha2'
 
 setup(name='pynsq',
       version=version,

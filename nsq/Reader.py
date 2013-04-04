@@ -55,7 +55,6 @@ try:
 except ImportError:
     import json # pyflakes.ignore
 import time
-import signal
 import socket
 import functools
 import urllib
@@ -313,7 +312,13 @@ class Reader(object):
         conn.last_recv_timestamp = time.time()
         conn.last_msg_timestamp = time.time()
         
-        initial_ready = self.connection_max_in_flight()
+        # we send an initial ready of 1 up to our configured max_in_flight
+        # this resolves two cases:
+        #    1. `max_in_flight >= num_conns` ensuring that no connections are ever 
+        #       *initially* starved since redistribute won't apply
+        #    2. `max_in_flight < num_conns` ensuring that we never exceed max_in_flight
+        #       and rely on the fact that redistribute will handle balancing RDY across conns
+        initial_ready = 1
         if self.total_ready + initial_ready > self.max_in_flight:
             initial_ready = 0
         conn.ready = initial_ready
