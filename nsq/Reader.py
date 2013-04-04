@@ -152,6 +152,14 @@ class Reader(object):
         
         logging.info("starting reader for topic '%s'..." % self.topic)
         
+        # we dont want to redistribute ready state across multiple connections per task
+        # because each task would be fighting for 1/N of the RDY state
+        num_tasks = len(self.task_lookup)
+        if num_tasks > self.max_in_flight:
+            logging.info("max_in_flight (%d) < # tasks (%d) ... setting max_in_flight to %d", 
+                self.max_in_flight, num_tasks, num_tasks)
+            self.max_in_flight = num_tasks
+        
         for task in self.task_lookup:
             for addr in self.nsqd_tcp_addresses:
                 address, port = addr.split(':')
