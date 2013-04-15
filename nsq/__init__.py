@@ -20,7 +20,7 @@ def run():
     tornado.ioloop.IOLoop.instance().start()
 
 
-__version__ = '0.4.0-alpha3'
+__version__ = '0.4.0-alpha4'
 __author__ = "Matt Reiferson <snakes@gmail.com>"
 __all__ = ["Reader", "run", "BackoffTimer",
            "SyncConn", "AsyncConn", "unpack_response", "decode_message", 
