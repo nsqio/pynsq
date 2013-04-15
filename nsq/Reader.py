@@ -72,7 +72,7 @@ class Reader(object):
     def __init__(self, all_tasks, topic, channel,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                 max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120,
-                low_rdy_idle_timeout=10):
+                low_rdy_idle_timeout=10, heartbeat_interval=30):
         """
         Reader receives messages over the specified ``topic/channel`` and provides an async loop
         that calls each task method provided by ``all_tasks`` up to ``max_tries``.
@@ -140,6 +140,7 @@ class Reader(object):
         self.low_rdy_idle_timeout = low_rdy_idle_timeout
         self.total_ready = 0
         self.lookupd_poll_interval = lookupd_poll_interval
+        self.heartbeat_interval = heartbeat_interval
 
         self.task_lookup = all_tasks
 
@@ -343,7 +344,11 @@ class Reader(object):
             channel = self.channel
 
         try:
-            conn.send(nsq.identify({'short_id': self.short_hostname, 'long_id': self.hostname}))
+            conn.send(nsq.identify({
+                'short_id': self.short_hostname,
+                'long_id': self.hostname,
+                'heartbeat_interval': self.heartbeat_interval * 1000
+                }))
             conn.send(nsq.subscribe(self.topic, channel))
             conn.send(nsq.ready(conn.ready))
         except Exception:
