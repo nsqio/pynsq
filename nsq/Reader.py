@@ -344,10 +344,14 @@ class Reader(object):
             channel = self.channel
 
         try:
+            heartbeat_interval = self.heartbeat_interval
+            if heartbeat_interval != -1:
+                heartbeat_interval *= 1000
+
             conn.send(nsq.identify({
                 'short_id': self.short_hostname,
                 'long_id': self.hostname,
-                'heartbeat_interval': self.heartbeat_interval * 1000
+                'heartbeat_interval': heartbeat_interval
                 }))
             conn.send(nsq.subscribe(self.topic, channel))
             conn.send(nsq.ready(conn.ready))

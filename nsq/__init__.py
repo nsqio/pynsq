@@ -20,11 +20,12 @@ def run():
     tornado.ioloop.IOLoop.instance().start()
 
 
-__version__ = '0.4.0-alpha4'
+__version__ = '0.4.0-alpha5'
+
 __author__ = "Matt Reiferson <snakes@gmail.com>"
 __all__ = ["Reader", "run", "BackoffTimer",
-           "SyncConn", "AsyncConn", "unpack_response", "decode_message", 
-           "identify", "subscribe", "ready", "finish", "touch", "requeue", "nop", 
+           "SyncConn", "AsyncConn", "unpack_response", "decode_message",
+           "identify", "subscribe", "ready", "finish", "touch", "requeue", "nop",
            "valid_topic_name", "valid_channel_name",
            "FRAME_TYPE_RESPONSE", "FRAME_TYPE_ERROR", "FRAME_TYPE_MESSAGE",
            "TOUCH", "FIN", "REQ"]
