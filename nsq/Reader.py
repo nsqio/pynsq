@@ -72,7 +72,7 @@ class Reader(object):
     def __init__(self, all_tasks, topic, channel,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                 max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120,
-                low_rdy_idle_timeout=10):
+                low_rdy_idle_timeout=10, heartbeat_interval=30):
         """
         Reader receives messages over the specified ``topic/channel`` and provides an async loop
         that calls each task method provided by ``all_tasks`` up to ``max_tries``.
@@ -112,8 +112,9 @@ class Reader(object):
             assert callable(method), "key %s must have a callable value" % key
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
-        assert isinstance(max_in_flight, int) and 0 < max_in_flight < 2500
-        
+        assert isinstance(max_in_flight, int) and 0 < max_in_flight <= 2500
+        assert isinstance(heartbeat_interval, (int, float)) and heartbeat_interval >= 1
+
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
                 assert isinstance(nsqd_tcp_addresses, (str, unicode))
@@ -140,7 +141,8 @@ class Reader(object):
         self.low_rdy_idle_timeout = low_rdy_idle_timeout
         self.total_ready = 0
         self.lookupd_poll_interval = lookupd_poll_interval
-        
+        self.heartbeat_interval = int(heartbeat_interval * 1000)
+
         self.task_lookup = all_tasks
         
         self.backoff_timer = dict((k, BackoffTimer.BackoffTimer(0, 120)) for k in self.task_lookup.keys())
@@ -156,7 +158,7 @@ class Reader(object):
         # because each task would be fighting for 1/N of the RDY state
         num_tasks = len(self.task_lookup)
         if num_tasks > self.max_in_flight:
-            logging.info("max_in_flight (%d) < # tasks (%d) ... setting max_in_flight to %d", 
+            logging.info("max_in_flight (%d) < # tasks (%d) ... setting max_in_flight to %d",
                 self.max_in_flight, num_tasks, num_tasks)
             self.max_in_flight = num_tasks
         
@@ -324,7 +326,7 @@ class Reader(object):
         
         # we send an initial ready of 1 up to our configured max_in_flight
         # this resolves two cases:
-        #    1. `max_in_flight >= num_conns` ensuring that no connections are ever 
+        #    1. `max_in_flight >= num_conns` ensuring that no connections are ever
         #       *initially* starved since redistribute won't apply
         #    2. `max_in_flight < num_conns` ensuring that we never exceed max_in_flight
         #       and rely on the fact that redistribute will handle balancing RDY across conns
@@ -343,7 +345,11 @@ class Reader(object):
             channel = self.channel
         
         try:
-            conn.send(nsq.identify({'short_id': self.short_hostname, 'long_id': self.hostname}))
+            conn.send(nsq.identify({
+                'short_id': self.short_hostname,
+                'long_id': self.hostname,
+                'heartbeat_interval': self.heartbeat_interval
+            }))
             conn.send(nsq.subscribe(self.topic, channel))
             conn.send(nsq.ready(conn.ready))
         except Exception:
@@ -361,7 +367,7 @@ class Reader(object):
         if len(self.lookupd_http_addresses) == 0:
             # automatically reconnect to nsqd addresses when not using lookupd
             logging.info("[%s] attempting to reconnect in 15s", conn.id)
-            reconnect_callback = functools.partial(self.connect_to_nsqd, 
+            reconnect_callback = functools.partial(self.connect_to_nsqd,
                 host=conn.host, port=conn.port, task=task)
             tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, reconnect_callback)
     
@@ -399,9 +405,9 @@ class Reader(object):
         now = time.time()
         for conn_id, conn in self.conns.iteritems():
             timestamp = conn.last_recv_timestamp
-            if (now - timestamp) > 60:
+            if (now - timestamp) > (self.heartbeat_interval / 1000.0):
                 # this connection hasnt received data beyond
-                # the normal heartbeat interval, close it
+                # the configured heartbeat interval, close it
                 logging.warning("[%s] connection is stale, closing", conn.id)
                 conn.close()
     
@@ -434,7 +440,7 @@ class Reader(object):
     def process_message(self, task, message):
         """
         identifies the task method and calls the task.
-        this is useful to override if you want to change 
+        this is useful to override if you want to change
         how your task methods are called
         """
         task_method = self.task_lookup[task]
