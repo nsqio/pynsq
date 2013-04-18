@@ -436,7 +436,7 @@ class Reader(object):
         now = time.time()
         for conn_id, conn in self.conns.iteritems():
             timestamp = conn.last_recv_timestamp
-            if (now - timestamp) > (self.heartbeat_interval / 1000.0):
+            if (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0):
                 # this connection hasnt received data beyond
                 # the configured heartbeat interval, close it
                 logging.warning("[%s] connection is stale (%.02fs), closing", conn.id, (now - timestamp))
