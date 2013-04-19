@@ -112,7 +112,7 @@ class Reader(object):
             assert callable(method), "key %s must have a callable value" % key
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
-        assert isinstance(max_in_flight, int) and 0 < max_in_flight <= 2500
+        assert isinstance(max_in_flight, int) and max_in_flight > 0
         assert isinstance(heartbeat_interval, (int, float)) and heartbeat_interval >= 1
 
         if nsqd_tcp_addresses:
@@ -276,6 +276,9 @@ class Reader(object):
         
         conn.rdy_timeout = None
         
+        if value > conn.max_rdy_count:
+            value = conn.max_rdy_count
+        
         if (self.total_ready + value) > self.max_in_flight:
             return
         
@@ -298,8 +301,15 @@ class Reader(object):
             except Exception:
                 logging.exception('[%s] failed to handle_message() %r' % (conn.id, message))
         elif frame == nsq.FRAME_TYPE_RESPONSE and data == "_heartbeat_":
+            logging.info("[%s] received heartbeat", conn.id)
             self.heartbeat(conn)
             conn.send(nsq.nop())
+        elif frame == nsq.FRAME_TYPE_RESPONSE:
+            if conn.response_callback_queue:
+                callback = conn.response_callback_queue.pop(0)
+                callback(conn, data)
+        elif frame == nsq.FRAME_TYPE_ERROR:
+            logging.error("[%s] ERROR: %s", conn.id, data)
     
     def connect_to_nsqd(self, host, port, task):
         assert isinstance(host, (str, unicode))
@@ -323,6 +333,10 @@ class Reader(object):
         conn.rdy_timeout = None
         conn.last_recv_timestamp = time.time()
         conn.last_msg_timestamp = time.time()
+        conn.response_callback_queue = []
+        # for backwards compatibility when interacting with older nsqd
+        # (pre 0.2.20), default this to their hard-coded max
+        conn.max_rdy_count = 2500
         
         # we send an initial ready of 1 up to our configured max_in_flight
         # this resolves two cases:
@@ -345,16 +359,33 @@ class Reader(object):
             channel = self.channel
         
         try:
-            conn.send(nsq.identify({
+            identify_data = {
                 'short_id': self.short_hostname,
                 'long_id': self.hostname,
-                'heartbeat_interval': self.heartbeat_interval
-            }))
+                'heartbeat_interval': self.heartbeat_interval,
+                'feature_negotiation': True,
+            }
+            logging.info("[%s] IDENTIFY sent %r", conn.id, identify_data)
+            conn.send(nsq.identify(identify_data))
+            conn.response_callback_queue.append(self._identify_response_callback)
             conn.send(nsq.subscribe(self.topic, channel))
             conn.send(nsq.ready(conn.ready))
         except Exception:
             conn.close()
             logging.exception('[%s] failed to bootstrap connection' % conn.id)
+    
+    def _identify_response_callback(self, conn, data):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            logging.warning("[%s] failed to parse JSON from nsqd: %r", conn.id, data)
+            return
+        
+        logging.info('[%s] IDENTIFY received %r', conn.id, data)
+        conn.max_rdy_count = data['max_rdy_count']
+        if conn.max_rdy_count < self.max_in_flight:
+            logging.warning("[%s] max RDY count %d < reader max in flight %d, truncation possible",
+                conn.id, conn.max_rdy_count, self.max_in_flight)
     
     def _close_callback(self, conn, task):
         if conn.id in self.conns:
@@ -405,10 +436,10 @@ class Reader(object):
         now = time.time()
         for conn_id, conn in self.conns.iteritems():
             timestamp = conn.last_recv_timestamp
-            if (now - timestamp) > (self.heartbeat_interval / 1000.0):
+            if (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0):
                 # this connection hasnt received data beyond
                 # the configured heartbeat interval, close it
-                logging.warning("[%s] connection is stale, closing", conn.id)
+                logging.warning("[%s] connection is stale (%.02fs), closing", conn.id, (now - timestamp))
                 conn.close()
     
     def redistribute_ready_state(self):
