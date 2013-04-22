@@ -375,6 +375,9 @@ class Reader(object):
             logging.exception('[%s] failed to bootstrap connection' % conn.id)
     
     def _identify_response_callback(self, conn, data):
+        if data == 'OK':
+            return
+        
         try:
             data = json.loads(data)
         except json.JSONDecodeError:
