@@ -2,8 +2,8 @@ import signal
 import tornado.ioloop
 import logging
 
-from nsq import unpack_response, decode_message, identify, subscribe, ready, finish, touch, requeue, nop
-from nsq import valid_topic_name, valid_channel_name
+from nsq import Message, unpack_response, decode_message, valid_topic_name, valid_channel_name
+from nsq import identify, subscribe, ready, finish, touch, requeue, nop
 from nsq import FRAME_TYPE_RESPONSE, FRAME_TYPE_ERROR, FRAME_TYPE_MESSAGE, TOUCH, FIN, REQ
 from BackoffTimer import BackoffTimer
 from sync import SyncConn
@@ -20,10 +20,10 @@ def run():
     tornado.ioloop.IOLoop.instance().start()
 
 
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 __author__ = "Matt Reiferson <snakes@gmail.com>"
-__all__ = ["Reader", "run", "BackoffTimer",
+__all__ = ["Reader", "run", "BackoffTimer", "Message",
            "SyncConn", "AsyncConn", "unpack_response", "decode_message",
            "identify", "subscribe", "ready", "finish", "touch", "requeue", "nop",
            "valid_topic_name", "valid_channel_name",
