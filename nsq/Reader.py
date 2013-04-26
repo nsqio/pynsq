@@ -83,7 +83,7 @@ class Reader(object):
         between updating of RDY count.
         
         ``all_tasks`` defines the a mapping of tasks and callables that will be executed for each
-            message received.
+            message received
         
         ``topic`` specifies the desired NSQ topic
         
@@ -99,13 +99,19 @@ class Reader(object):
             which messages will be automatically discarded
         
         ``max_in_flight`` the maximum number of messages this reader will pipeline for processing.
-            this value will be divided evenly amongst the configured/discovered nsqd producers.
+            this value will be divided evenly amongst the configured/discovered nsqd producers
         
         ``requeue_delay`` the base multiple used when re-queueing (multiplied by # of attempts)
         
-        ``lookupd_poll_interval`` the amount of time in between querying all of the supplied
+        ``lookupd_poll_interval`` the amount of time in seconds between querying all of the supplied
             nsqlookupd instances.  a random amount of time based on thie value will be initially
-            introduced in order to add jitter when multiple readers are running.
+            introduced in order to add jitter when multiple readers are running
+        
+        ``low_rdy_idle_timeout`` the amount of time in seconds to wait for a message from a producer
+            when in a state where RDY counts are re-distributed (ie. max_in_flight < num_producers)
+        
+        ``heartbeat_interval`` the amount of time in seconds to negotiate with the connected 
+            producers to send heartbeats (requires nsqd 0.2.19+)
         """
         assert isinstance(all_tasks, dict)
         for key, method in all_tasks.items():
@@ -179,15 +185,17 @@ class Reader(object):
         tornado.ioloop.IOLoop.instance().add_timeout(time.time() + delay, periodic.start)
     
     def _client_callback(self, response, message=None, task=None, conn=None, **kwargs):
-        '''
+        """
         This is the method that an asynchronous nsqreader should call to indicate
         async completion of a message. This will most likely be exposed as the respond
         callable in the Message instance with some functools voodoo
-        '''
+        """
         if response is nsq.FIN:
+            conn.in_flight -= 1
             self.backoff_timer[task].success()
             self.finish(conn, message)
         elif response is nsq.REQ:
+            conn.in_flight -= 1
             if kwargs.get('backoff', True):
                 self.backoff_timer[task].failure()
             self.requeue(conn, message, time_ms=kwargs.get('time_ms', -1))
@@ -226,9 +234,39 @@ class Reader(object):
     def connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
     
+    def is_starved(self):
+        """
+        when max_in_flight > 1 and you're batching messages together to perform work
+        is isn't possible to just compare the len of your list of buffered messages against
+        your configured max_in_flight (because max_in_flight may not be evenly divisible
+        by the number of producers you're connected to, ie. you might never get that many
+        messages... it's a *max*)
+        
+        is_starved is the solution and would typically be used as follows:
+        
+            class MyHandler(object):
+                reader = None
+                buf = []
+                
+                def message_handler(self, nsq_msg):
+                    self.buf.append(nsq_msg)
+                    if self.reader.is_starved():
+                        # perform work
+                        self.buf = []
+            
+            handler = MyHandler()
+            handler.reader = nsq.Reader({ "handler": handler.message_handler}, ...)
+            nsq.run()
+        """
+        for conn_id, conn in self.conns.iteritems():
+            if conn.in_flight > 0 and conn.in_flight >= (conn.last_ready * 0.85):
+                return True
+        return False
+    
     def handle_message(self, conn, task, message):
         conn.ready = max(conn.ready - 1, 0)
         self.total_ready = max(self.total_ready - 1, 0)
+        conn.in_flight += 1
         
         # update ready count if necessary...
         # if we're in a backoff state for this task
@@ -284,6 +322,7 @@ class Reader(object):
         
         try:
             conn.send(nsq.ready(value))
+            conn.last_ready = value
             conn.ready = value
         except Exception:
             conn.close()
@@ -334,6 +373,7 @@ class Reader(object):
         conn.last_recv_timestamp = time.time()
         conn.last_msg_timestamp = time.time()
         conn.response_callback_queue = []
+        conn.in_flight = 0
         # for backwards compatibility when interacting with older nsqd
         # (pre 0.2.20), default this to their hard-coded max
         conn.max_rdy_count = 2500
@@ -347,6 +387,7 @@ class Reader(object):
         initial_ready = 1
         if self.total_ready + initial_ready > self.max_in_flight:
             initial_ready = 0
+        conn.last_ready = initial_ready
         conn.ready = initial_ready
         self.total_ready += initial_ready
         
