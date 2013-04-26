@@ -51,6 +51,10 @@ class Message(object):
         self.respond(TOUCH)
 
 
+class Error(Exception):
+    pass
+
+
 def unpack_response(data):
     frame = struct.unpack('>l', data[:4])[0]
     return frame, data[4:]
@@ -96,6 +100,16 @@ def touch(id):
 
 def nop():
     return _command('NOP', None)
+
+def pub(topic, data):
+    return _command('PUB', data, topic)
+
+def mpub(topic, data):
+    assert isinstance(data, (set, list))
+    body = struct.pack('>l', len(data))
+    for m in data:
+        body += struct.pack('>l', len(m)) + m
+    return _command('MPUB', body, topic)
 
 def valid_topic_name(topic):
     if not 0 < len(topic) < 33:
