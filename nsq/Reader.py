@@ -69,7 +69,7 @@ import async
 
 
 class Reader(object):
-    def __init__(self, all_tasks, topic, channel,
+    def __init__(self, topic, channel, tasks=None,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                 max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120,
                 low_rdy_idle_timeout=10, heartbeat_interval=30):
@@ -113,9 +113,6 @@ class Reader(object):
         ``heartbeat_interval`` the amount of time in seconds to negotiate with the connected 
             producers to send heartbeats (requires nsqd 0.2.19+)
         """
-        assert isinstance(all_tasks, dict)
-        for key, method in all_tasks.items():
-            assert callable(method), "key %s must have a callable value" % key
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
@@ -148,8 +145,10 @@ class Reader(object):
         self.total_ready = 0
         self.lookupd_poll_interval = lookupd_poll_interval
         self.heartbeat_interval = int(heartbeat_interval * 1000)
-
-        self.task_lookup = all_tasks
+        
+        self.task_lookup = {}
+        if tasks:
+            self.add_tasks(tasks)
         
         self.backoff_timer = dict((k, BackoffTimer.BackoffTimer(0, 120)) for k in self.task_lookup.keys())
         
@@ -158,22 +157,20 @@ class Reader(object):
         self.conns = {}
         self.http_client = tornado.httpclient.AsyncHTTPClient()
         
-        logging.info("starting reader for topic '%s'..." % self.topic)
+        # will execute when run() is called (for all Reader instances)
+        tornado.ioloop.IOLoop.instance().add_callback(self._run)
+    
+    def _run(self):
+        assert len(self.task_lookup), "you must provide tasks to Reader"
         
-        # we dont want to redistribute ready state across multiple connections per task
-        # because each task would be fighting for 1/N of the RDY state
-        num_tasks = len(self.task_lookup)
-        if num_tasks > self.max_in_flight:
-            logging.info("max_in_flight (%d) < # tasks (%d) ... setting max_in_flight to %d",
-                self.max_in_flight, num_tasks, num_tasks)
-            self.max_in_flight = num_tasks
+        logging.info("starting reader for topic '%s'..." % self.topic)
         
         for task in self.task_lookup:
             for addr in self.nsqd_tcp_addresses:
                 address, port = addr.split(':')
                 self.connect_to_nsqd(address, int(port), task)
         
-        # trigger the first one manually
+        # trigger the first lookup query manually
         self.query_lookupd()
         
         tornado.ioloop.PeriodicCallback(self.redistribute_ready_state, 5 * 1000).start()
@@ -183,6 +180,21 @@ class Reader(object):
         # randomize based on 10% of the interval
         delay = random.random() * self.lookupd_poll_interval * .1
         tornado.ioloop.IOLoop.instance().add_timeout(time.time() + delay, periodic.start)
+    
+    def add_tasks(self, tasks):
+        assert isinstance(tasks, dict)
+        for key, method in tasks.items():
+            assert callable(method), "key %s must have a callable value" % key
+        
+        self.task_lookup.update(tasks)
+        
+        # we dont want to redistribute ready state across multiple connections per task
+        # because each task would be fighting for 1/N of the RDY state
+        num_tasks = len(self.task_lookup)
+        if num_tasks > self.max_in_flight:
+            logging.info("max_in_flight (%d) < # tasks (%d) ... setting max_in_flight to %d",
+                self.max_in_flight, num_tasks, num_tasks)
+            self.max_in_flight = num_tasks
     
     def _client_callback(self, response, message=None, task=None, conn=None, **kwargs):
         """
