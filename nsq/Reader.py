@@ -421,7 +421,7 @@ class Reader(object):
         
         try:
             data = json.loads(data)
-        except json.JSONDecodeError:
+        except ValueError:
             logging.warning("[%s] failed to parse JSON from nsqd: %r", conn.id, data)
             return
         
@@ -461,7 +461,7 @@ class Reader(object):
         
         try:
             lookup_data = json.loads(response.body)
-        except json.JSONDecodeError:
+        except ValueError:
             logging.warning("[%s] failed to parse JSON from lookupd: %r", endpoint, response.body)
             return
         

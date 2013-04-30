@@ -16,6 +16,8 @@ import nsq
 
 def pytest_generate_tests(metafunc):
     identify_body = json.dumps({'a': 1, 'b': 2})
+    msgs = ['asdf', 'ghjk', 'abcd']
+    mpub_body = struct.pack('>l', len(msgs)) + ''.join(struct.pack('>l', len(m)) + m for m in msgs)
     if metafunc.function == test_command:
         for cmd_method, kwargs, result in [
                 (nsq.identify, 
@@ -42,6 +44,12 @@ def pytest_generate_tests(metafunc):
                 (nsq.nop, 
                     {},
                     'NOP\n'),
+                (nsq.pub,
+                    {'topic': 'test', 'data': msgs[0]},
+                    'PUB test\n' + struct.pack('>l', len(msgs[0])) + msgs[0]),
+                (nsq.mpub,
+                    {'topic': 'test', 'data': msgs},
+                    'MPUB test\n' + struct.pack('>l', len(mpub_body)) + mpub_body)
             ]:
             metafunc.addcall(funcargs=dict(cmd_method=cmd_method, kwargs=kwargs, result=result))
 
