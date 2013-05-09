@@ -2,6 +2,8 @@
 
 `pynsq` is the official Python client library for [NSQ][nsq].
 
+Latest stable release is **[0.4.2][latest_stable]**
+
 [![Build Status](https://secure.travis-ci.org/bitly/pynsq.png)](http://travis-ci.org/bitly/pynsq)
 
 It provides a high-level reader library for building consumers and two low-level modules for both
@@ -22,8 +24,7 @@ async module.
 
 Multiple reader instances can be instantiated in a single process (to consume from multiple
 topics/channels at once). Each specifying a set of tasks that will be called for each message over
-that channel. Tasks are defined as a dictionary of string names -> callables passed as
-`all_tasks` during instantiation.
+that channel. Tasks are defined as a dictionary of string names -> callables.
 
 The library handles backoff as well as maintaining a sufficient RDY count based on the # of
 producers and your configured `max_in_flight`.
@@ -34,18 +35,11 @@ functions are called.
 `validate_method` defines an optional callable that returns a boolean as to weather or not this
 message should be processed.
 
-`async` determines whether handlers will do asynchronous processing
+Handlers should be defined as shown in the examples below. The handler receives a message object
+that has instance methods `finish()`, `requeue()`, and `touch()` to respond to `nsqd`.
 
-**NOTE**: As of `0.3.2+`, `async` is deprecated (as is the use of its `finisher` method for responding to a message). 
-
-Instead, the message object now has instance methods `finish()`, `requeue()`, and `touch()`. To ease
-the transition to this new API, `async=True` enables legacy support so that your handlers can
-continue to receive a `finisher` kwarg. Its use will display a `DeprecationWarning` and the
-functionality will be removed in a future release.
-
-We suggest you begin to migrate your old `async=True` handlers ASAP to instead call
-`message.enable_async()`, pass the message around, and respond using its instance methods
-`finish()` or `requeue()`.
+If you want to perform asynchronous message processing call the message object's `enable_async()`,
+pass the message around, and respond using its aforementioned instance methods.
 
 Here is an example that demonstrates synchronous message processing:
 
@@ -88,11 +82,9 @@ def process_message(message):
     # cache the message for later processing
     buf.append(message)
     if len(buf) >= 3:
-        print '****'
         for msg in buf:
             print msg
             msg.finish()
-        print '****'
         buf = []
     else:
         print 'deferring processing'
@@ -103,5 +95,6 @@ r = nsq.Reader(all_tasks, lookupd_http_addresses=['http://127.0.0.1:4161'],
 nsq.run()
 ```
 
+[latest_stable]: https://pypi.python.org/pypi?:action=display&name=pynsq&version=0.4.2
 [nsq]: https://github.com/bitly/nsq
 [tornado]: https://github.com/facebook/tornado
