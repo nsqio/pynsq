@@ -2,16 +2,16 @@
 
 ## 0.4.0 - 2013-04-19
 
-  #22 - feature negotiation (supported by nsqd v0.2.20+)
+ * #22 - feature negotiation (supported by nsqd v0.2.20+)
         wait 2x heartbeat interval before closing conns
         more logging improvements
-  #21 - configurable heartbeat interval (supported by nsqd v0.2.19+)
-  #17 - add task to all connection related logging; ensure max_in_flight is never < # tasks
-  #16 - always set initial RDY count to 1
-  #15 - run travis tests on more tornado versions
-  #14 - automatically reconnect to nsqd when not using lookupd
-  #12 - cleanup/remove deprecated async=True
-  #9 - redistribute ready state when max_in_flight < num_conns
+ * #21 - configurable heartbeat interval (supported by nsqd v0.2.19+)
+ * #17 - add task to all connection related logging; ensure max_in_flight is never < # tasks
+ * #16 - always set initial RDY count to 1
+ * #15 - run travis tests on more tornado versions
+ * #14 - automatically reconnect to nsqd when not using lookupd
+ * #12 - cleanup/remove deprecated async=True
+ * #9 - redistribute ready state when max_in_flight < num_conns
 
 ## 0.3.4 - 2013-02-20
  
