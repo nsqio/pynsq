@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.2 - 2013-05-09
+
+ * #25 - add Writer
+ * #24 - add is_starved to Reader
+
+## 0.4.1 - 2013-04-22
+
+ * #23 - fix Message export, cleanup IDENTIFY response logging
+
 ## 0.4.0 - 2013-04-19
 
  * #22 - feature negotiation (supported by nsqd v0.2.20+)
