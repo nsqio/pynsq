@@ -1,6 +1,7 @@
 from setuptools import setup
 
-version = '0.4.2'
+# also update in nsq/__init__.py
+version = '0.4.3-alpha'
 
 setup(name='pynsq',
       version=version,

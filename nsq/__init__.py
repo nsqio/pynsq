@@ -20,7 +20,7 @@ def run():
     signal.signal(signal.SIGTERM, _handle_term_signal)
     tornado.ioloop.IOLoop.instance().start()
 
-
+# also update in setup.py
 __version__ = '0.4.3-alpha'
 
 __author__ = "Matt Reiferson <snakes@gmail.com>"
