@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3-alpha 
+
+ * #13 - improve backoff handling
+
 ## 0.4.2 - 2013-05-09
 
  * #25 - add Writer
