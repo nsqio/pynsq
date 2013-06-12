@@ -229,17 +229,22 @@ class Reader(object):
                 logging.info('[%s] backing off for %0.2f seconds' % (conn.id, backoff_interval))
                 self.backoff_block[task] = True
                 _ioloop = tornado.ioloop.IOLoop.instance()
-                conn_idx = random.randrange(len(self.conns))
-                for i, task_conn in enumerate(task_conn for task_conn in self.conns.itervalues() if task_conn.task == task):
+                task_connections = [task_conn for task_conn in self.conns.itervalues() if task_conn.task == task]
+                # clear current RDY state (and delayed RDY changes)
+                for task_conn in task_connections:
                     self.send_ready(task_conn, 0)
                     if task_conn.rdy_timeout:
                         _ioloop.remove_timeout(task_conn.rdy_timeout)
                         task_conn.rdy_timeout = None
-                    if i == conn_idx:
-                        send_ready_callback = functools.partial(self.send_ready, task_conn, 1)
-                        remove_backoff_block = functools.partial(self._remove_backoff_block, task, send_ready_callback)
-                        task_conn.rdy_timeout = _ioloop.add_timeout(time.time() + backoff_interval, remove_backoff_block)
+                
+                # pick a single task and delay RDY 1 to recover from backoff
+                task_conn_retry = random.choice(task_connections)
+                send_ready_callback = functools.partial(self.send_ready, task_conn_retry, 1)
+                remove_backoff_block = functools.partial(self._remove_backoff_block, task, send_ready_callback)
+                task_conn_retry.rdy_timeout = _ioloop.add_timeout(time.time() + backoff_interval, remove_backoff_block)
+                
             elif start_backoff_interval:
+                # leaving backoff state
                 for task_conn in (task_conn for task_conn in self.conns.itervalues() if task_conn.task == task):
                     self.update_rdy(task_conn)
     
