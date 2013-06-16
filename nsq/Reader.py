@@ -11,16 +11,12 @@ the specified topic in order to discover new producers and reconnect to existing
 sync ex.
     import nsq
     
-    def task1(message):
+    def handler(message):
         print message
         return True
     
-    def task2(message):
-        print message
-        return True
-    
-    all_tasks = {"task1": task1, "task2": task2}
-    r = nsq.Reader(all_tasks, lookupd_http_addresses=['http://127.0.0.1:4161'],
+    r = nsq.Reader(message_handler=handler, 
+            lookupd_http_addresses=['http://127.0.0.1:4161'],
             topic="nsq_reader", channel="asdf", lookupd_poll_interval=15)
     nsq.run()
 
@@ -35,17 +31,15 @@ async ex.
         # cache the message for later processing
         buf.append(message)
         if len(buf) >= 3:
-            print '****'
             for msg in buf:
                 print msg
                 msg.finish()
-            print '****'
             buf = []
         else:
             print 'deferring processing'
     
-    all_tasks = {"task1": process_message}
-    r = nsq.Reader(all_tasks, lookupd_http_addresses=['http://127.0.0.1:4161'],
+    r = nsq.Reader(message_handler=process_message, 
+            lookupd_http_addresses=['http://127.0.0.1:4161'],
             topic="nsq_reader", channel="async", max_in_flight=9)
     nsq.run()
 """
@@ -69,21 +63,20 @@ import async
 
 
 class Reader(object):
-    def __init__(self, all_tasks, topic, channel,
+    def __init__(self, topic, channel, message_handler=None, name=None,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                 max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120,
                 low_rdy_idle_timeout=10, heartbeat_interval=30, max_backoff_duration=128):
         """
         Reader receives messages over the specified ``topic/channel`` and provides an async loop
-        that calls each task method provided by ``all_tasks`` up to ``max_tries``.
+        that calls message_handler up to ``max_tries``.
         
-        It will handle sending FIN or REQ commands based on feedback from the task methods.  When
-        re-queueing, an increasing delay will be calculated automatically.  Additionally, when
+        It will handle sending FIN or REQ commands based on feedback from the message handler.
+        When re-queueing, an increasing delay will be calculated automatically.  Additionally, when
         message processing fails, it will backoff for increasing multiples of ``requeue_delay``
         between updating of RDY count.
         
-        ``all_tasks`` defines the a mapping of tasks and callables that will be executed for each
-            message received
+        ``message_handler`` the callable that will be executed for each message received
         
         ``topic`` specifies the desired NSQ topic
         
@@ -115,9 +108,6 @@ class Reader(object):
 
         ``max_backoff_duration`` the maximum time we will allow a backoff state to last in seconds
         """
-        assert isinstance(all_tasks, dict)
-        for key, method in all_tasks.items():
-            assert callable(method), "key %s must have a callable value" % key
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
@@ -140,6 +130,10 @@ class Reader(object):
         
         assert nsqd_tcp_addresses or lookupd_http_addresses
         
+        self.name = name
+        self.message_handler = None
+        if message_handler:
+            self.set_message_handler(message_handler)
         self.topic = topic
         self.channel = channel
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
@@ -148,132 +142,108 @@ class Reader(object):
         self.max_tries = max_tries
         self.max_in_flight = max_in_flight
         self.low_rdy_idle_timeout = low_rdy_idle_timeout
-        self.total_ready = 0
+        self.total_rdy = 0
         self.lookupd_poll_interval = lookupd_poll_interval
         self.heartbeat_interval = int(heartbeat_interval * 1000)
-
-        self.task_lookup = all_tasks
         
-        self.backoff_timer = dict((k, BackoffTimer.BackoffTimer(0, max_backoff_duration)) for k in self.task_lookup.keys())
-        self.backoff_block = dict((k, False) for k in self.task_lookup.keys())
+        self.backoff_timer = BackoffTimer.BackoffTimer(0, max_backoff_duration)
+        self.backoff_block = False
         
         self.hostname = socket.gethostname()
         self.short_hostname = self.hostname.split('.')[0]
         self.conns = {}
         self.http_client = tornado.httpclient.AsyncHTTPClient()
         
-        logging.info("starting reader for topic '%s'..." % self.topic)
+        self.ioloop = tornado.ioloop.IOLoop.instance()
         
-        # we dont want to redistribute ready state across multiple connections per task
-        # because each task would be fighting for 1/N of the RDY state
-        num_tasks = len(self.task_lookup)
-        if num_tasks > self.max_in_flight:
-            logging.info("max_in_flight (%d) < # tasks (%d) ... setting max_in_flight to %d",
-                self.max_in_flight, num_tasks, num_tasks)
-            self.max_in_flight = num_tasks
+        # will execute when run() is called (for all Reader instances)
+        self.ioloop.add_callback(self._run)
+    
+    def _run(self):
+        assert self.message_handler, "you must specify the Reader's message_handler"
         
-        for task in self.task_lookup:
-            for addr in self.nsqd_tcp_addresses:
-                address, port = addr.split(':')
-                self.connect_to_nsqd(address, int(port), task)
+        logging.info("[%s] starting reader for %s/%s..." % (self.name, self.topic, self.channel))
         
-        # trigger the first one manually
+        for addr in self.nsqd_tcp_addresses:
+            address, port = addr.split(':')
+            self.connect_to_nsqd(address, int(port))
+        
+        # trigger the first lookup query manually
         self.query_lookupd()
         
-        tornado.ioloop.PeriodicCallback(self.redistribute_ready_state, 5 * 1000).start()
-        tornado.ioloop.PeriodicCallback(self.check_last_recv_timestamps, 60 * 1000).start()
+        tornado.ioloop.PeriodicCallback(self._redistribute_rdy_state, 5 * 1000).start()
+        tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000).start()
         periodic = tornado.ioloop.PeriodicCallback(self.query_lookupd, self.lookupd_poll_interval * 1000)
         # randomize the time we start this poll loop so that all servers don't query at exactly the same time
         # randomize based on 10% of the interval
         delay = random.random() * self.lookupd_poll_interval * .1
-        tornado.ioloop.IOLoop.instance().add_timeout(time.time() + delay, periodic.start)
+        self.ioloop.add_timeout(time.time() + delay, periodic.start)
     
-    def _client_callback(self, response, message=None, task=None, conn=None, **kwargs):
+    def set_message_handler(self, message_handler):
+        assert callable(message_handler), "message_handler must be callable"
+        self.message_handler = message_handler
+        if not self.name:
+            self.name = self.message_handler.__name__
+    
+    def _message_responder(self, response, message=None, conn=None, **kwargs):
         """
-        This is the method that an asynchronous nsqreader should call to indicate
-        async completion of a message. This will most likely be exposed as the respond
-        callable in the Message instance with some functools voodoo
+        This is the underlying implementation behind a message's instance methods
+        for responding to nsqd.
 
-        In addition, we take care of backoff and task blocking if a message is
-        required WITH backoff.  When this happens, we set a failure on the
-        backoff timer and set the RDY count to zero.  Once the backoff time has
-        expired, we allow ONE of the connections to let a single message
-        through in order to see if the task has recovered.  In this state, one
-        message at a time will pass through and once we have a success (ie: a
-        message's .finish() is called), we go back to the normal RDY count.
+        In addition, we take care of backoff in the appropriate cases.  When this
+        happens, we set a failure on the backoff timer and set the RDY count to zero.
+        Once the backoff time has expired, we allow *one* of the connections let
+        a single message through to test the water.  This will continue until we
+        reach no backoff in which case we go back to the normal RDY count.
 
-        NOTE: A message's .finish() and .requeue() count positively and
-        negatively (resp) to the backoff state.  .requeue(backoff=False),
-        however, is considered neutral and will not help or hinder a task's
-        backoff state.
+        NOTE: A calling a message's .finish() and .requeue() methods positively and
+        negatively impact the backoff state, respectively.  However, sending the
+        backoff=False keyword argument to .requeue() is considered neutral and
+        will not impact backoff state.
         """
-        start_backoff_interval = self.backoff_timer[task].get_interval()
         if response is nsq.FIN:
-            conn.in_flight -= 1
-            if not self.backoff_block[task]:
-                self.backoff_timer[task].success()
-            self.finish(conn, message)
+            if not self.backoff_block:
+                self.backoff_timer.success()
+            self._finish(conn, message)
         elif response is nsq.REQ:
-            conn.in_flight -= 1
-            if kwargs.get('backoff', True) and not self.backoff_block[task]: 
-                self.backoff_timer[task].failure()
-            self.requeue(conn, message, time_ms=kwargs.get('time_ms', -1))
+            if kwargs.get('backoff', True) and not self.backoff_block: 
+                self.backoff_timer.failure()
+            self._requeue(conn, message, time_ms=kwargs.get('time_ms', -1))
         elif response is nsq.TOUCH:
-            return self.touch(conn, message)
+            return self._touch(conn, message)
         else:
             raise TypeError("invalid NSQ response type: %s" % response)
-
-        if not self.backoff_block[task]:
-            backoff_interval = self.backoff_timer[task].get_interval()
-            if backoff_interval:
-                logging.info('[%s] backing off for %0.2f seconds' % (conn.id, backoff_interval))
-                self.backoff_block[task] = True
-                _ioloop = tornado.ioloop.IOLoop.instance()
-                task_connections = [task_conn for task_conn in self.conns.itervalues() if task_conn.task == task]
-                # clear current RDY state (and delayed RDY changes)
-                for task_conn in task_connections:
-                    self.send_ready(task_conn, 0)
-                    if task_conn.rdy_timeout:
-                        _ioloop.remove_timeout(task_conn.rdy_timeout)
-                        task_conn.rdy_timeout = None
-                
-                # pick a single task and delay RDY 1 to recover from backoff
-                task_conn_retry = random.choice(task_connections)
-                send_ready_callback = functools.partial(self.send_ready, task_conn_retry, 1)
-                remove_backoff_block = functools.partial(self._remove_backoff_block, task, send_ready_callback)
-                task_conn_retry.rdy_timeout = _ioloop.add_timeout(time.time() + backoff_interval, remove_backoff_block)
-                
-            elif start_backoff_interval:
-                # leaving backoff state
-                for task_conn in (task_conn for task_conn in self.conns.itervalues() if task_conn.task == task):
-                    self.update_rdy(task_conn)
+        
+        self._maybe_update_rdy(conn)
     
-    def requeue(self, conn, message, time_ms=-1):
+    def _requeue(self, conn, message, time_ms=-1):
         if message.attempts > self.max_tries:
             self.giving_up(message)
             return self.finish(conn, message)
         
         try:
+            conn.in_flight -= 1
             # ms
             requeue_delay = self.requeue_delay * message.attempts if time_ms < 0 else time_ms
             conn.send(nsq.requeue(message.id, requeue_delay))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send requeue %s @ %d' % (conn.id, message.id, requeue_delay))
+            logging.exception('[%s:%s] failed to send requeue %s @ %d' % (conn.id, self.name, message.id, requeue_delay))
     
-    def finish(self, conn, message):
+    def _finish(self, conn, message):
         try:
+            conn.in_flight -= 1
             conn.send(nsq.finish(message.id))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send finish %s' % (conn.id, message.id))
+            logging.exception('[%s:%s] failed to send finish %s' % (conn.id, self.name, message.id))
     
-    def touch(self, conn, message):
+    def _touch(self, conn, message):
         try:
             conn.send(nsq.touch(message.id))
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send touch %s' % (conn.id, message.id))
+            logging.exception('[%s:%s] failed to send touch %s' % (conn.id, self.name, message.id))
     
     def connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
@@ -288,55 +258,35 @@ class Reader(object):
         
         is_starved is the solution and would typically be used as follows:
         
-            class MyHandler(object):
-                reader = None
-                buf = []
-                
-                def message_handler(self, nsq_msg):
-                    self.buf.append(nsq_msg)
-                    if self.reader.is_starved():
-                        # perform work
-                        self.buf = []
+            def message_handler(self, nsq_msg, reader):
+                # buffer messages
+                if reader.is_starved():
+                    # perform work
             
-            handler = MyHandler()
-            handler.reader = nsq.Reader({ "handler": handler.message_handler}, ...)
+            reader = nsq.Reader(...)
+            reader.set_message_handler(functools.partial(message_handler, reader=reader))
             nsq.run()
         """
-        for conn_id, conn in self.conns.iteritems():
-            if conn.in_flight > 0 and conn.in_flight >= (conn.last_ready * 0.85):
+        for conn in self.conns.itervalues():
+            if conn.in_flight > 0 and conn.in_flight >= (conn.last_rdy * 0.85):
                 return True
         return False
-
-    def _remove_backoff_block(self, task, callback):
-        self.backoff_block[task] = False
-        return callback()
-
-    def update_rdy(self, conn):
-        per_conn = self.connection_max_in_flight()
-        if not conn.rdy_timeout and (conn.ready <= 1 or conn.ready < int(per_conn * 0.25)):
-            self.send_ready(conn, per_conn)
     
-    def handle_message(self, conn, task, message):
-        conn.ready = max(conn.ready - 1, 0)
-        self.total_ready = max(self.total_ready - 1, 0)
+    def _handle_message(self, conn, message):
+        conn.rdy = max(conn.rdy - 1, 0)
+        self.total_rdy = max(self.total_rdy - 1, 0)
         conn.in_flight += 1
-
-        if not self.backoff_block[task]:
-            self.update_rdy(conn)
-
+        
+        self._maybe_update_rdy(conn)
+        
+        success = False
         try:
             pre_processed_message = self.preprocess_message(message)
             if not self.validate_message(pre_processed_message):
                 return message.finish()
+            success = self.process_message(message)
         except Exception:
-            logging.exception('[%s] caught exception while preprocessing' % conn.id)
-            return message.requeue()
-        
-        success = False
-        try:
-            success = self.process_message(task, message)
-        except Exception:
-            logging.exception('[%s] caught exception while handling message' % conn.id)
+            logging.exception('[%s:%s] uncaught exception while handling message %r' % (conn.id, self.name, message.id))
             if not message.has_responded():
                 return message.requeue()
         
@@ -346,45 +296,79 @@ class Reader(object):
                 return message.finish()
             return message.requeue()
     
-    def send_ready(self, conn, value):
-        if value == conn.ready:
-            return
-
-        if value and self.disabled():
-            logging.info('[%s] disabled, delaying ready state change', conn.id)
-            send_ready_callback = functools.partial(self.send_ready, conn, value)
-            conn.rdy_timeout = tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, send_ready_callback)
+    def _maybe_update_rdy(self, conn):
+        if self.backoff_block:
             return
         
-        conn.rdy_timeout = None
+        if self.backoff_timer.get_interval():
+            self._start_backoff(conn)
+            return
+        
+        if conn.rdy <= 1 or conn.rdy < int(conn.last_rdy * 0.25):
+            self._send_rdy(conn, self.connection_max_in_flight())
+    
+    def _finish_backoff(self, callback):
+        self.backoff_block = False
+        return callback()
+    
+    def _start_backoff(self, conn):
+        self.backoff_block = True
+        backoff_interval = self.backoff_timer.get_interval()
+        
+        for c in self.conns.itervalues():
+            logging.info('[%s:%s] backing off for %0.2f seconds' % (c.id, self.name, backoff_interval))
+            self._send_rdy(c, 0)
+            if c.rdy_timeout:
+                self.ioloop.remove_timeout(c.rdy_timeout)
+                conn.rdy_timeout = None
+        
+        send_rdy_callback = functools.partial(self._send_rdy, conn, 1)
+        finish_backoff_callback = functools.partial(self._finish_backoff, send_rdy_callback)
+        deadline = time.time() + backoff_interval
+        conn.rdy_timeout = self.ioloop.add_timeout(deadline, finish_backoff_callback)
+    
+    def _send_rdy(self, conn, value):
+        if value == conn.rdy:
+            return
+        
+        if value and self.disabled():
+            logging.info('[%s:%s] disabled, delaying RDY state change' % (conn.id, self.name))
+            send_rdy_callback = functools.partial(self._send_rdy, conn, value)
+            conn.rdy_timeout = self.ioloop.add_timeout(time.time() + 15, send_rdy_callback)
+            return
+        
+        if conn.rdy_timeout:
+            self.ioloop.remove_timeout(conn.rdy_timeout)
+            conn.rdy_timeout = None
         
         if value > conn.max_rdy_count:
             value = conn.max_rdy_count
         
-        if (self.total_ready + value) > self.max_in_flight:
+        if (self.total_rdy + value) > self.max_in_flight:
             return
         
         try:
             conn.send(nsq.ready(value))
-            conn.last_ready = value
-            conn.ready = value
+            self.total_rdy = max(self.total_rdy - conn.rdy + value, 0)
+            conn.last_rdy = value
+            conn.rdy = value
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to send ready' % conn.id)
+            logging.exception('[%s:%s] failed to send RDY' % (conn.id, self.name))
     
-    def _data_callback(self, conn, raw_data, task):
+    def _data_callback(self, conn, raw_data):
         conn.last_recv_timestamp = time.time()
         frame, data  = nsq.unpack_response(raw_data)
         if frame == nsq.FRAME_TYPE_MESSAGE:
             conn.last_msg_timestamp = time.time()
             message = nsq.decode_message(data)
-            message.respond = functools.partial(self._client_callback, message=message, task=task, conn=conn)
+            message.respond = functools.partial(self._message_responder, message=message, conn=conn)
             try:
-                self.handle_message(conn, task, message)
+                self._handle_message(conn, message)
             except Exception:
-                logging.exception('[%s] failed to handle_message() %r' % (conn.id, message))
+                logging.exception('[%s:%s] failed to handle_message() %r' % (conn.id, self.name, message))
         elif frame == nsq.FRAME_TYPE_RESPONSE and data == "_heartbeat_":
-            logging.info("[%s] received heartbeat", conn.id)
+            logging.info("[%s:%s] received heartbeat" % (conn.id, self.name))
             self.heartbeat(conn)
             conn.send(nsq.nop())
         elif frame == nsq.FRAME_TYPE_RESPONSE:
@@ -392,57 +376,38 @@ class Reader(object):
                 callback = conn.response_callback_queue.pop(0)
                 callback(conn, data)
         elif frame == nsq.FRAME_TYPE_ERROR:
-            logging.error("[%s] ERROR: %s", conn.id, data)
+            logging.error("[%s:%s] ERROR: %s" % (conn.id, self.name, data))
     
-    def connect_to_nsqd(self, host, port, task):
+    def connect_to_nsqd(self, host, port):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         
-        conn_id = host + ':' + str(port) + ':' + task
+        conn_id = host + ':' + str(port)
         if conn_id in self.conns:
             return
         
-        logging.info("[%s] connecting to nsqd", conn_id)
+        logging.info("[%s:%s] connecting to nsqd" % (conn_id, self.name))
         
-        connect_callback = functools.partial(self._connect_callback, task=task)
-        data_callback = functools.partial(self._data_callback, task=task)
-        close_callback = functools.partial(self._close_callback, task=task)
-        
-        conn = async.AsyncConn(host, port, connect_callback, data_callback, close_callback)
+        conn = async.AsyncConn(host, port,
+            self._connect_callback,
+            self._data_callback,
+            self._close_callback)
         conn.connect()
         
         conn.id = conn_id
-        conn.task = task
         conn.rdy_timeout = None
         conn.last_recv_timestamp = time.time()
         conn.last_msg_timestamp = time.time()
         conn.response_callback_queue = []
         conn.in_flight = 0
+        conn.rdy = 0
         # for backwards compatibility when interacting with older nsqd
         # (pre 0.2.20), default this to their hard-coded max
         conn.max_rdy_count = 2500
         
-        # we send an initial ready of 1 up to our configured max_in_flight
-        # this resolves two cases:
-        #    1. `max_in_flight >= num_conns` ensuring that no connections are ever
-        #       *initially* starved since redistribute won't apply
-        #    2. `max_in_flight < num_conns` ensuring that we never exceed max_in_flight
-        #       and rely on the fact that redistribute will handle balancing RDY across conns
-        initial_ready = 1
-        if self.total_ready + initial_ready > self.max_in_flight:
-            initial_ready = 0
-        conn.last_ready = initial_ready
-        conn.ready = initial_ready
-        self.total_ready += initial_ready
-        
         self.conns[conn_id] = conn
     
-    def _connect_callback(self, conn, task):
-        if len(self.task_lookup) > 1:
-            channel = self.channel + '.' + task
-        else:
-            channel = self.channel
-        
+    def _connect_callback(self, conn):
         try:
             identify_data = {
                 'short_id': self.short_hostname,
@@ -450,14 +415,20 @@ class Reader(object):
                 'heartbeat_interval': self.heartbeat_interval,
                 'feature_negotiation': True,
             }
-            logging.info("[%s] IDENTIFY sent %r", conn.id, identify_data)
+            logging.info("[%s:%s] IDENTIFY sent %r" % (conn.id, self.name, identify_data))
             conn.send(nsq.identify(identify_data))
             conn.response_callback_queue.append(self._identify_response_callback)
-            conn.send(nsq.subscribe(self.topic, channel))
-            conn.send(nsq.ready(conn.ready))
+            conn.send(nsq.subscribe(self.topic, self.channel))
+            # we send an initial RDY of 1 up to our configured max_in_flight
+            # this resolves two cases:
+            #    1. `max_in_flight >= num_conns` ensuring that no connections are ever
+            #       *initially* starved since redistribute won't apply
+            #    2. `max_in_flight < num_conns` ensuring that we never exceed max_in_flight
+            #       and rely on the fact that redistribute will handle balancing RDY across conns
+            self._send_rdy(conn, 1)
         except Exception:
             conn.close()
-            logging.exception('[%s] failed to bootstrap connection' % conn.id)
+            logging.exception('[%s:%s] failed to bootstrap connection' % (conn.id, self.name))
     
     def _identify_response_callback(self, conn, data):
         if data == 'OK':
@@ -466,29 +437,28 @@ class Reader(object):
         try:
             data = json.loads(data)
         except ValueError:
-            logging.warning("[%s] failed to parse JSON from nsqd: %r", conn.id, data)
+            logging.warning("[%s:%S] failed to parse JSON from nsqd: %r" % (conn.id, self.name, data))
             return
         
-        logging.info('[%s] IDENTIFY received %r', conn.id, data)
+        logging.info('[%s:%s] IDENTIFY received %r' % (conn.id, self.name, data))
         conn.max_rdy_count = data['max_rdy_count']
         if conn.max_rdy_count < self.max_in_flight:
-            logging.warning("[%s] max RDY count %d < reader max in flight %d, truncation possible",
-                conn.id, conn.max_rdy_count, self.max_in_flight)
+            logging.warning("[%s:%s] max RDY count %d < reader max in flight %d, truncation possible" %
+                (conn.id, self.name, conn.max_rdy_count, self.max_in_flight))
     
-    def _close_callback(self, conn, task):
+    def _close_callback(self, conn):
         if conn.id in self.conns:
             del self.conns[conn.id]
         
-        self.total_ready = max(self.total_ready - conn.ready, 0)
+        self.total_rdy = max(self.total_rdy - conn.rdy, 0)
         
-        logging.warning("[%s] connection closed for task '%s'", conn.id, task)
+        logging.warning("[%s:%s] connection closed" % (conn.id, self.name))
         
         if len(self.lookupd_http_addresses) == 0:
             # automatically reconnect to nsqd addresses when not using lookupd
-            logging.info("[%s] attempting to reconnect in 15s", conn.id)
-            reconnect_callback = functools.partial(self.connect_to_nsqd,
-                host=conn.host, port=conn.port, task=task)
-            tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, reconnect_callback)
+            logging.info("[%s:%s] attempting to reconnect in 15s" % (conn.id, self.name))
+            reconnect_callback = functools.partial(self.connect_to_nsqd, host=conn.host, port=conn.port)
+            self.ioloop.add_timeout(time.time() + 15, reconnect_callback)
     
     def query_lookupd(self):
         for endpoint in self.lookupd_http_addresses:
@@ -500,73 +470,92 @@ class Reader(object):
     
     def _finish_query_lookupd(self, response, endpoint):
         if response.error:
-            logging.warning("[%s] lookupd error %s", endpoint, response.error)
+            logging.warning("[%s] lookupd %s query error: %s" % (self.name, endpoint, response.error))
             return
         
         try:
             lookup_data = json.loads(response.body)
         except ValueError:
-            logging.warning("[%s] failed to parse JSON from lookupd: %r", endpoint, response.body)
+            logging.warning("[%s] lookupd %s failed to parse JSON: %r" % (self.name, endpoint, response.body))
             return
         
         if lookup_data['status_code'] != 200:
-            logging.warning("[%s] lookupd responded with %d", endpoint, lookup_data['status_code'])
+            logging.warning("[%s] lookupd %s responded with %d" % (self.name, endpoint, lookup_data['status_code']))
             return
         
-        for task in self.task_lookup:
-            for producer in lookup_data['data']['producers']:
-                # TODO: this can be dropped for 1.0
-                address = producer.get('broadcast_address', producer.get('address'))
-                assert address
-                self.connect_to_nsqd(address, producer['tcp_port'], task)
+        for producer in lookup_data['data']['producers']:
+            # TODO: this can be dropped for 1.0
+            address = producer.get('broadcast_address', producer.get('address'))
+            assert address
+            self.connect_to_nsqd(address, producer['tcp_port'])
     
-    def check_last_recv_timestamps(self):
+    def _check_last_recv_timestamps(self):
         now = time.time()
         for conn_id, conn in self.conns.iteritems():
             timestamp = conn.last_recv_timestamp
             if (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0):
                 # this connection hasnt received data beyond
                 # the configured heartbeat interval, close it
-                logging.warning("[%s] connection is stale (%.02fs), closing", conn.id, (now - timestamp))
+                logging.warning("[%s:%s] connection is stale (%.02fs), closing" % (conn.id, self.name, (now - timestamp)))
                 conn.close()
     
-    def redistribute_ready_state(self):
+    def _redistribute_rdy_state(self):
+        """
+        we redistribute RDY counts in two cases:
+        
+        1. our # of connections exceeds our configured max_in_flight
+        2. we're in backoff mode
+        
+        At a high level, we're trying to mitigate stalls related to low-volume
+        producers when we're unable (by configuration or backoff) to provide a RDY count
+        of (at least) 1 to all of our connections.
+        
+        We first set RDY 0 to all connections that have not received a message within
+        a configurable timeframe (low_rdy_idle_timeout).
+        
+        We then randomly walk the list of possible connections and send RDY 1 (up to our
+        configured max_in_flight).  We only need to send RDY 1 because in both cases described
+        above your per connection RDY count would never be higher.  We also don't attempt to
+        avoid the connections who previously might have had RDY 1 because it would be overly
+        complicated and not actually worth it (ie. given enough redistribution rounds it
+        doesn't matter).
+        """
         if self.disabled():
             return
         
-        if len(self.conns) > self.max_in_flight:
-            logging.debug('redistributing ready state (%d conns > %d max_in_flight)', len(self.conns), self.max_in_flight)
+        if (len(self.conns) > self.max_in_flight) or (self.backoff_timer.get_interval() and not self.backoff_block):
+            logging.debug('redistributing RDY state (%d conns > %d max_in_flight)', 
+                len(self.conns), self.max_in_flight)
+            
             for conn_id, conn in self.conns.iteritems():
                 last_message_duration = time.time() - conn.last_msg_timestamp
-                logging.debug('[%s] rdy: %d (last message received %.02fs)', conn.id, conn.ready, last_message_duration)
-                if conn.ready > 0 and last_message_duration > self.low_rdy_idle_timeout:
-                    logging.info('[%s] idle connection, giving up RDY count', conn.id)
-                    self.total_ready = max(self.total_ready - conn.ready, 0)
-                    self.send_ready(conn, 0)
+                logging.debug('[%s:%s] rdy: %d (last message received %.02fs)' %
+                    (conn.id, self.name, conn.rdy, last_message_duration))
+                if conn.rdy > 0 and last_message_duration > self.low_rdy_idle_timeout:
+                    logging.info('[%s:%s] idle connection, giving up RDY count' % (conn.id, self.name))
+                    self._send_rdy(conn, 0)
             
             possible_conns = self.conns.values()
-            max_in_flight = self.max_in_flight - self.total_ready
+            max_in_flight = self.max_in_flight - self.total_rdy
             while possible_conns and max_in_flight:
                 max_in_flight -= 1
                 conn = possible_conns.pop(random.randrange(len(possible_conns)))
-                logging.info('[%s] redistributing RDY', conn.id)
-                self.send_ready(conn, 1)
+                logging.info('[%s:%s] redistributing RDY' % (conn.id, self.name))
+                self._send_rdy(conn, 1)
     
     #
     # subclass overwriteable
     #
     
-    def process_message(self, task, message):
+    def process_message(self, message):
         """
-        identifies the task method and calls the task.
-        this is useful to override if you want to change
-        how your task methods are called
+        calls the message handler...
+        this is useful to override if you want to change how your message handlers are called
         """
-        task_method = self.task_lookup[task]
-        return task_method(message)
+        return self.message_handler(message)
     
     def giving_up(self, message):
-        logging.warning("giving up on message '%s' after max tries %d", message.id, self.max_tries)
+        logging.warning("[%s] giving up on message '%s' after max tries %d" % (self.name, message.id, self.max_tries))
     
     def disabled(self):
         return False
