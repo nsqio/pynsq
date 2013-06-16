@@ -4,14 +4,15 @@ from Reader import Reader
 
 class LegacyReader(object):
     """
-    In v0.5.0 we dropped support for "tasks" in the Reader API in favor of a single message handler.
+    In ``v0.5.0`` we dropped support for "tasks" in the :class:`nsq.Reader` API in 
+    favor of a single message handler.
     
-    LegacyReader is a backwards compatible API for clients interacting with v0.5.0+ that
+    ``LegacyReader`` is a backwards compatible API for clients interacting with ``v0.5.0+`` that
     want to continue to use "tasks".
     
-    Usage:
+    Usage::
     
-    from nsq import LegacyReader as Reader
+        from nsq import LegacyReader as Reader
     """
     def __init__(self, *args, **kwargs):
         warnings.warn("LegacyReader is a deprecated wrapper and will be removed in a future release.  Use (multiple) Reader(s) each with their own message handler.", DeprecationWarning)

@@ -18,6 +18,9 @@ def _handle_term_signal(sig_num, frame):
     tornado.ioloop.IOLoop.instance().stop()
 
 def run():
+    """
+    Starts any instantiated :class:`nsq.Reader` or :class:`nsq.Writer`
+    """
     signal.signal(signal.SIGTERM, _handle_term_signal)
     tornado.ioloop.IOLoop.instance().start()
 

@@ -1,48 +1,3 @@
-"""
-high-level NSQ reader class built on top of a Tornado IOLoop supporting both sync and
-async modes of operation.
-
-supports various hooks to modify behavior when heartbeats are received, temporarily
-disable the reader, and pre-process/validate messages.
-
-when supplied a list of nsqlookupd addresses, a reader instance will periodically poll
-the specified topic in order to discover new producers and reconnect to existing ones.
-
-sync ex.
-    import nsq
-    
-    def handler(message):
-        print message
-        return True
-    
-    r = nsq.Reader(message_handler=handler, 
-            lookupd_http_addresses=['http://127.0.0.1:4161'],
-            topic="nsq_reader", channel="asdf", lookupd_poll_interval=15)
-    nsq.run()
-
-async ex.
-    import nsq
-    
-    buf = []
-    
-    def process_message(message):
-        global buf
-        message.enable_async()
-        # cache the message for later processing
-        buf.append(message)
-        if len(buf) >= 3:
-            for msg in buf:
-                print msg
-                msg.finish()
-            buf = []
-        else:
-            print 'deferring processing'
-    
-    r = nsq.Reader(message_handler=process_message, 
-            lookupd_http_addresses=['http://127.0.0.1:4161'],
-            topic="nsq_reader", channel="async", max_in_flight=9)
-    nsq.run()
-"""
 import logging
 try:
     import simplejson as json
@@ -63,57 +18,116 @@ import async
 
 
 class Reader(object):
+    """
+    Reader provides high-level functionality for building robust NSQ consumers in Python
+    on top of the async module.
+    
+    Reader receives messages over the specified ``topic/channel`` and calls ``message_handler`` 
+    for each message (up to ``max_tries``).
+    
+    Multiple readers can be instantiated in a single process (to consume from multiple
+    topics/channels at once).
+    
+    Supports various hooks to modify behavior when heartbeats are received, to temporarily
+    disable the reader, and pre-process/validate messages.
+    
+    When supplied a list of ``nsqlookupd`` addresses, it will periodically poll those
+    addresses to discover new producers of the specified ``topic``.
+    
+    It maintains a sufficient RDY count based on the # of producers and your configured
+    ``max_in_flight``.
+    
+    Handlers should be defined as shown in the examples below. The handler receives a
+    :class:`nsq.Message` object that has instance methods :meth:`nsq.Message.finish`, 
+    :meth:`nsq.Message.requeue`, and :meth:`nsq.Message.touch` to respond to ``nsqd``.
+    
+    It is responsible for sending ``FIN`` or ``REQ`` commands based on return value of 
+    ``message_handler``. When re-queueing, an increasing delay will be calculated automatically.  
+    
+    Additionally, when message processing fails, it will backoff in increasing multiples of 
+    ``requeue_delay`` between updating of RDY count.
+    
+    Synchronous example::
+        
+        import nsq
+        
+        def handler(message):
+            print message
+            return True
+        
+        r = nsq.Reader(message_handler=handler,
+                lookupd_http_addresses=['http://127.0.0.1:4161'],
+                topic="nsq_reader", channel="asdf", lookupd_poll_interval=15)
+        nsq.run()
+    
+    Asynchronous example::
+        
+        import nsq
+        
+        buf = []
+        
+        def process_message(message):
+            global buf
+            message.enable_async()
+            # cache the message for later processing
+            buf.append(message)
+            if len(buf) >= 3:
+                for msg in buf:
+                    print msg
+                    msg.finish()
+                buf = []
+            else:
+                print 'deferring processing'
+        
+        r = nsq.Reader(message_handler=process_message,
+                lookupd_http_addresses=['http://127.0.0.1:4161'],
+                topic="nsq_reader", channel="async", max_in_flight=9)
+        nsq.run()
+    
+    :param message_handler: the callable that will be executed for each message received
+    
+    :param topic: specifies the desired NSQ topic
+    
+    :param channel: specifies the desired NSQ channel
+    
+    :param name: a string that is used for logging messages
+    
+    :param nsqd_tcp_addresses: a sequence of string addresses of the nsqd instances this reader
+        should connect to
+    
+    :param lookupd_http_addresses: a sequence of string addresses of the nsqlookupd instances this
+        reader should query for producers of the specified topic
+    
+    :param max_tries: the maximum number of attempts the reader will make to process a message after
+        which messages will be automatically discarded
+    
+    :param max_in_flight: the maximum number of messages this reader will pipeline for processing.
+        this value will be divided evenly amongst the configured/discovered nsqd producers
+    
+    :param requeue_delay: the base multiple used when re-queueing (multiplied by # of attempts)
+    
+    :param lookupd_poll_interval: the amount of time in seconds between querying all of the supplied
+        nsqlookupd instances.  a random amount of time based on thie value will be initially
+        introduced in order to add jitter when multiple readers are running
+    
+    :param low_rdy_idle_timeout: the amount of time in seconds to wait for a message from a producer
+        when in a state where RDY counts are re-distributed (ie. max_in_flight < num_producers)
+    
+    :param heartbeat_interval: the amount of time in seconds to negotiate with the connected
+        producers to send heartbeats (requires nsqd 0.2.19+)
+    
+    :param max_backoff_duration: the maximum time we will allow a backoff state to last in seconds
+    """
     def __init__(self, topic, channel, message_handler=None, name=None,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                 max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120,
                 low_rdy_idle_timeout=10, heartbeat_interval=30, max_backoff_duration=128):
-        """
-        Reader receives messages over the specified ``topic/channel`` and provides an async loop
-        that calls message_handler up to ``max_tries``.
-        
-        It will handle sending FIN or REQ commands based on feedback from the message handler.
-        When re-queueing, an increasing delay will be calculated automatically.  Additionally, when
-        message processing fails, it will backoff for increasing multiples of ``requeue_delay``
-        between updating of RDY count.
-        
-        ``message_handler`` the callable that will be executed for each message received
-        
-        ``topic`` specifies the desired NSQ topic
-        
-        ``channel`` specifies the desired NSQ channel
-        
-        ``nsqd_tcp_addresses`` a sequence of string addresses of the nsqd instances this reader
-            should connect to
-        
-        ``lookupd_http_addresses`` a sequence of string addresses of the nsqlookupd instances this
-            reader should query for producers of the specified topic
-        
-        ``max_tries`` the maximum number of attempts the reader will make to process a message after
-            which messages will be automatically discarded
-        
-        ``max_in_flight`` the maximum number of messages this reader will pipeline for processing.
-            this value will be divided evenly amongst the configured/discovered nsqd producers
-        
-        ``requeue_delay`` the base multiple used when re-queueing (multiplied by # of attempts)
-        
-        ``lookupd_poll_interval`` the amount of time in seconds between querying all of the supplied
-            nsqlookupd instances.  a random amount of time based on thie value will be initially
-            introduced in order to add jitter when multiple readers are running
-        
-        ``low_rdy_idle_timeout`` the amount of time in seconds to wait for a message from a producer
-            when in a state where RDY counts are re-distributed (ie. max_in_flight < num_producers)
-        
-        ``heartbeat_interval`` the amount of time in seconds to negotiate with the connected 
-            producers to send heartbeats (requires nsqd 0.2.19+)
-
-        ``max_backoff_duration`` the maximum time we will allow a backoff state to last in seconds
-        """
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
         assert isinstance(heartbeat_interval, (int, float)) and heartbeat_interval >= 1
         assert isinstance(max_backoff_duration, (int, float)) and max_backoff_duration > 0
-
+        
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
                 assert isinstance(nsqd_tcp_addresses, (str, unicode))
@@ -180,6 +194,11 @@ class Reader(object):
         self.ioloop.add_timeout(time.time() + delay, periodic.start)
     
     def set_message_handler(self, message_handler):
+        """
+        Assigns the callback method to be executed for each message received
+        
+        :param message_handler: a callable that takes a single argument
+        """
         assert callable(message_handler), "message_handler must be callable"
         self.message_handler = message_handler
         if not self.name:
@@ -189,13 +208,13 @@ class Reader(object):
         """
         This is the underlying implementation behind a message's instance methods
         for responding to nsqd.
-
+        
         In addition, we take care of backoff in the appropriate cases.  When this
         happens, we set a failure on the backoff timer and set the RDY count to zero.
         Once the backoff time has expired, we allow *one* of the connections let
         a single message through to test the water.  This will continue until we
         reach no backoff in which case we go back to the normal RDY count.
-
+        
         NOTE: A calling a message's .finish() and .requeue() methods positively and
         negatively impact the backoff state, respectively.  However, sending the
         backoff=False keyword argument to .requeue() is considered neutral and
@@ -206,7 +225,7 @@ class Reader(object):
                 self.backoff_timer.success()
             self._finish(conn, message)
         elif response is nsq.REQ:
-            if kwargs.get('backoff', True) and not self.backoff_block: 
+            if kwargs.get('backoff', True) and not self.backoff_block:
                 self.backoff_timer.failure()
             self._requeue(conn, message, time_ms=kwargs.get('time_ms', -1))
         elif response is nsq.TOUCH:
@@ -245,19 +264,21 @@ class Reader(object):
             conn.close()
             logging.exception('[%s:%s] failed to send touch %s' % (conn.id, self.name, message.id))
     
-    def connection_max_in_flight(self):
+    def _connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
     
     def is_starved(self):
         """
-        when max_in_flight > 1 and you're batching messages together to perform work
+        Used to identify when buffered messages should be processed and responded to.
+        
+        When max_in_flight > 1 and you're batching messages together to perform work
         is isn't possible to just compare the len of your list of buffered messages against
         your configured max_in_flight (because max_in_flight may not be evenly divisible
         by the number of producers you're connected to, ie. you might never get that many
-        messages... it's a *max*)
+        messages... it's a *max*).
         
-        is_starved is the solution and would typically be used as follows:
-        
+        Example::
+            
             def message_handler(self, nsq_msg, reader):
                 # buffer messages
                 if reader.is_starved():
@@ -305,7 +326,7 @@ class Reader(object):
             return
         
         if conn.rdy <= 1 or conn.rdy < int(conn.last_rdy * 0.25):
-            self._send_rdy(conn, self.connection_max_in_flight())
+            self._send_rdy(conn, self._connection_max_in_flight())
     
     def _finish_backoff(self, callback):
         self.backoff_block = False
@@ -379,6 +400,12 @@ class Reader(object):
             logging.error("[%s:%s] ERROR: %s" % (conn.id, self.name, data))
     
     def connect_to_nsqd(self, host, port):
+        """
+        Adds a connection to ``nsqd`` at the specified address.
+        
+        :param host: the address to connect to
+        :param port: the port to connect to
+        """
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         
@@ -461,6 +488,9 @@ class Reader(object):
             self.ioloop.add_timeout(time.time() + 15, reconnect_callback)
     
     def query_lookupd(self):
+        """
+        Trigger a query of the configured ``nsq_lookupd_http_addresses``.
+        """
         for endpoint in self.lookupd_http_addresses:
             lookupd_url = endpoint + "/lookup?topic=" + urllib.quote(self.topic)
             req = tornado.httpclient.HTTPRequest(lookupd_url, method="GET",
@@ -501,7 +531,7 @@ class Reader(object):
     
     def _redistribute_rdy_state(self):
         """
-        we redistribute RDY counts in two cases:
+        We redistribute RDY counts in two cases:
         
         1. our # of connections exceeds our configured max_in_flight
         2. we're in backoff mode
@@ -524,7 +554,7 @@ class Reader(object):
             return
         
         if (len(self.conns) > self.max_in_flight) or (self.backoff_timer.get_interval() and not self.backoff_block):
-            logging.debug('redistributing RDY state (%d conns > %d max_in_flight)', 
+            logging.debug('redistributing RDY state (%d conns > %d max_in_flight)',
                 len(self.conns), self.max_in_flight)
             
             for conn_id, conn in self.conns.iteritems():
@@ -549,18 +579,43 @@ class Reader(object):
     
     def process_message(self, message):
         """
-        calls the message handler...
-        this is useful to override if you want to change how your message handlers are called
+        Called when a message is received in order to execute the configured ``message_handler``
+        
+        This is useful to subclass and override if you want to change how your
+        message handlers are called.
+        
+        :param message: the :class:`nsq.Message` received
         """
         return self.message_handler(message)
     
     def giving_up(self, message):
+        """
+        Called when a message has been received where ``msg.attempts > max_tries``
+        
+        This is useful to subclass and override to perform a task (such as writing to disk, etc.)
+        
+        :param message: the :class:`nsq.Message` received
+        """
         logging.warning("[%s] giving up on message '%s' after max tries %d" % (self.name, message.id, self.max_tries))
     
     def disabled(self):
+        """
+        Called as part of RDY handling to identify whether this Reader has been disabled
+        
+        This is useful to subclass and override to examine a file on disk or a key in cache
+        to identify if this reader should pause execution (during a deploy, etc.).
+        """
         return False
     
     def heartbeat(self, conn):
+        """
+        Called whenever a heartbeat has been received
+        
+        This is useful to subclass and override to perform an action based on liveness (for
+        monitoring, etc.)
+        
+        :param conn: the :class:`nsq.AsyncConn` over which the heartbeat was received
+        """
         pass
     
     def validate_message(self, message):
