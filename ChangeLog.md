@@ -1,8 +1,22 @@
 # Changelog
 
-## 0.4.3-alpha 
+## 0.5.0-alpha
 
- * #13 - improve backoff handling
+This release drops the concept of "tasks" in `Reader` (in favor of a single message handler). This
+greatly simplifies internal RDY state handling and is a cleaner API as we head towards 1.0.
+
+These changes modify the public API and break backwards compatibility. To ease the transition we've
+added a `LegacyReader` class that accepts the previous version's arguments and facilitates
+instantiating new `Reader` instances for each task with the same automatic channel naming
+conventions.
+
+We suggest you begin to migrate towards using the new API directly (`LegacyReader` will not be
+in the 1.0 release), but for now the upgrade is as simple as:
+
+    from nsq import LegacyReader as Reader
+
+ * #29 - refactor public API (drop "tasks"); improve RDY count handling
+ * #28/#31 - improve backoff handling
 
 ## 0.4.2 - 2013-05-09
 
@@ -16,12 +30,11 @@
 ## 0.4.0 - 2013-04-19
 
  * #22 - feature negotiation (supported by nsqd v0.2.20+)
-        wait 2x heartbeat interval before closing conns
-        more logging improvements
+         wait 2x heartbeat interval before closing conns
+         more logging improvements
  * #21 - configurable heartbeat interval (supported by nsqd v0.2.19+)
  * #17 - add task to all connection related logging; ensure max_in_flight is never < # tasks
  * #16 - always set initial RDY count to 1
- * #15 - run travis tests on more tornado versions
  * #14 - automatically reconnect to nsqd when not using lookupd
  * #12 - cleanup/remove deprecated async=True
  * #9 - redistribute ready state when max_in_flight < num_conns

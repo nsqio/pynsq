@@ -9,6 +9,7 @@ from BackoffTimer import BackoffTimer
 from sync import SyncConn
 from async import AsyncConn
 from Reader import Reader
+from LegacyReader import LegacyReader
 from Writer import Writer
 
 
@@ -24,7 +25,7 @@ def run():
 __version__ = '0.4.3-alpha'
 
 __author__ = "Matt Reiferson <snakes@gmail.com>"
-__all__ = ["Reader", "Writer", "run", "BackoffTimer", "Message", "Error",
+__all__ = ["Reader", "Writer", "run", "BackoffTimer", "Message", "Error", "LegacyReader"
            "SyncConn", "AsyncConn", "unpack_response", "decode_message",
            "identify", "subscribe", "ready", "finish", "touch", "requeue", "nop","pub", "mpub",
            "valid_topic_name", "valid_channel_name",
