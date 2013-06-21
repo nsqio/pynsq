@@ -520,14 +520,20 @@ class Reader(object):
             self.connect_to_nsqd(address, producer['tcp_port'])
     
     def _check_last_recv_timestamps(self):
+        # this method takes care to get the list of stale connections then close
+        # so `conn.close()` doesn't modify the list of connections while we iterate them.
         now = time.time()
-        for conn_id, conn in self.conns.iteritems():
+        def is_stale(conn):
             timestamp = conn.last_recv_timestamp
-            if (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0):
-                # this connection hasnt received data beyond
-                # the configured heartbeat interval, close it
-                logging.warning("[%s:%s] connection is stale (%.02fs), closing" % (conn.id, self.name, (now - timestamp)))
-                conn.close()
+            return (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0)
+        
+        stale_connections = [conn for conn in self.conns.values() if is_stale(conn)]
+        for conn in stale_connections:
+            timestamp = conn.last_recv_timestamp
+            # this connection hasnt received data beyond
+            # the configured heartbeat interval, close it
+            logging.warning("[%s:%s] connection is stale (%.02fs), closing" % (conn.id, self.name, (now - timestamp)))
+            conn.close()
     
     def _redistribute_rdy_state(self):
         """
