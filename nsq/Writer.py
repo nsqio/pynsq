@@ -101,7 +101,7 @@ class Writer(object):
         logging.info("starting writer...")
         self.connect()
         
-        tornado.ioloop.PeriodicCallback(self.check_last_recv_timestamps, 60 * 1000).start()
+        tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000).start()
     
     def pub(self, topic, msg, callback=None):
         self._pub("pub", topic, msg, callback)
@@ -216,15 +216,21 @@ class Writer(object):
             host=conn.host, port=conn.port)
         tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, reconnect_callback)
     
-    def check_last_recv_timestamps(self):
+    def _check_last_recv_timestamps(self):
+        # this method takes care to get the list of stale connections then close
+        # so `conn.close()` doesn't modify the list of connections while we iterate them.
         now = time.time()
-        for conn_id, conn in self.conns.iteritems():
+        def is_stale(conn):
             timestamp = conn.last_recv_timestamp
-            if (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0):
-                # this connection hasnt received data beyond
-                # the configured heartbeat interval, close it
-                logging.warning("[%s] connection is stale (%.02fs), closing", conn.id, (now - timestamp))
-                conn.close()
+            return (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0)
+        
+        stale_connections = [conn for conn in self.conns.values() if is_stale(conn)]
+        for conn in stale_connections:
+            timestamp = conn.last_recv_timestamp
+            # this connection hasnt received data beyond
+            # the configured heartbeat interval, close it
+            logging.warning("[%s] connection is stale (%.02fs), closing" % (conn.id, (now - timestamp)))
+            conn.close()
     
     #
     # subclass overwriteable
