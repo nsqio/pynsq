@@ -90,7 +90,7 @@ class Reader(object):
     
     :param channel: specifies the desired NSQ channel
     
-    :param name: a string that is used for logging messages
+    :param name: a string that is used for logging messages (defaults to "topic:channel")
     
     :param nsqd_tcp_addresses: a sequence of string addresses of the nsqd instances this reader
         should connect to
@@ -127,6 +127,7 @@ class Reader(object):
         assert isinstance(max_in_flight, int) and max_in_flight > 0
         assert isinstance(heartbeat_interval, (int, float)) and heartbeat_interval >= 1
         assert isinstance(max_backoff_duration, (int, float)) and max_backoff_duration > 0
+        assert isinstance(name, (str, unicode, None.__class__))
         
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
@@ -144,7 +145,7 @@ class Reader(object):
         
         assert nsqd_tcp_addresses or lookupd_http_addresses
         
-        self.name = name
+        self.name = name or (topic + ":" + channel)
         self.message_handler = None
         if message_handler:
             self.set_message_handler(message_handler)
@@ -201,8 +202,6 @@ class Reader(object):
         """
         assert callable(message_handler), "message_handler must be callable"
         self.message_handler = message_handler
-        if not self.name:
-            self.name = self.message_handler.__name__
     
     def _message_responder(self, response, message=None, conn=None, **kwargs):
         """
