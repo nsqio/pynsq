@@ -340,7 +340,7 @@ class Reader(object):
             self._send_rdy(c, 0)
             if c.rdy_timeout:
                 self.ioloop.remove_timeout(c.rdy_timeout)
-                conn.rdy_timeout = None
+                c.rdy_timeout = None
         
         send_rdy_callback = functools.partial(self._send_rdy, conn, 1)
         finish_backoff_callback = functools.partial(self._finish_backoff, send_rdy_callback)
