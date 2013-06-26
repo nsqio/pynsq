@@ -82,5 +82,9 @@ class AsyncConn(object):
     def send(self, data):
         self.stream.write(data)
     
+    @property
+    def id(self):
+        return str(self)
+    
     def __str__(self):
         return self.host + ':' + str(self.port)
