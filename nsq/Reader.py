@@ -117,17 +117,24 @@ class Reader(object):
         producers to send heartbeats (requires nsqd 0.2.19+)
     
     :param max_backoff_duration: the maximum time we will allow a backoff state to last in seconds
+    
+    :param lookupd_poll_jitter: The maximum fractional amount of jitter to add to the lookupd pool loop.
+        This helps evenly distribute requests even if multiple consumers restart at the same time.
     """
     def __init__(self, topic, channel, message_handler=None, name=None,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
-                max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=120,
-                low_rdy_idle_timeout=10, heartbeat_interval=30, max_backoff_duration=128):
+                max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=60,
+                low_rdy_idle_timeout=10, heartbeat_interval=30, max_backoff_duration=128,
+                lookupd_poll_jitter=0.3):
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
         assert isinstance(heartbeat_interval, (int, float)) and heartbeat_interval >= 1
         assert isinstance(max_backoff_duration, (int, float)) and max_backoff_duration > 0
         assert isinstance(name, (str, unicode, None.__class__))
+        assert isinstance(lookupd_poll_interval, int)
+        assert isinstance(lookupd_poll_jitter, float)
+        assert lookupd_poll_jitter >= 0 and lookupd_poll_jitter <= 1
         
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
@@ -140,6 +147,7 @@ class Reader(object):
             if not isinstance(lookupd_http_addresses, (list, set, tuple)):
                 assert isinstance(lookupd_http_addresses, (str, unicode))
                 lookupd_http_addresses = [lookupd_http_addresses]
+            random.shuffle(lookupd_http_addresses)
         else:
             lookupd_http_addresses = []
         
@@ -153,6 +161,7 @@ class Reader(object):
         self.channel = channel
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
         self.lookupd_http_addresses = lookupd_http_addresses
+        self.lookupd_query_index = 0
         self.requeue_delay = int(requeue_delay * 1000)
         self.max_tries = max_tries
         self.max_in_flight = max_in_flight
@@ -160,6 +169,7 @@ class Reader(object):
         self.total_rdy = 0
         self.need_rdy_redistributed = False
         self.lookupd_poll_interval = lookupd_poll_interval
+        self.lookupd_poll_jitter = lookupd_poll_jitter
         self.heartbeat_interval = int(heartbeat_interval * 1000)
         
         self.backoff_timer = BackoffTimer.BackoffTimer(0, max_backoff_duration)
@@ -186,6 +196,8 @@ class Reader(object):
             address, port = addr.split(':')
             self.connect_to_nsqd(address, int(port))
         
+        if not self.lookupd_http_addresses:
+            return
         # trigger the first lookup query manually
         self.query_lookupd()
         
@@ -193,8 +205,8 @@ class Reader(object):
         tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000).start()
         periodic = tornado.ioloop.PeriodicCallback(self.query_lookupd, self.lookupd_poll_interval * 1000)
         # randomize the time we start this poll loop so that all servers don't query at exactly the same time
-        # randomize based on 10% of the interval
-        delay = random.random() * self.lookupd_poll_interval * .1
+        # randomize based on 30% of the interval
+        delay = random.random() * self.lookupd_poll_interval * self.lookupd_poll_jitter
         self.ioloop.add_timeout(time.time() + delay, periodic.start)
     
     def set_message_handler(self, message_handler):
@@ -539,7 +551,7 @@ class Reader(object):
             self.ioloop.remove_timeout(conn.rdy_timeout)
             conn.rdy_timeout = None
         
-        if len(self.lookupd_http_addresses) == 0:
+        if not self.lookupd_http_addresses:
             # automatically reconnect to nsqd addresses when not using lookupd
             logging.info("[%s:%s] attempting to reconnect in 15s", conn.id, self.name)
             reconnect_callback = functools.partial(self.connect_to_nsqd, host=conn.host, port=conn.port)
@@ -549,26 +561,27 @@ class Reader(object):
         """
         Trigger a query of the configured ``nsq_lookupd_http_addresses``.
         """
-        for endpoint in self.lookupd_http_addresses:
-            lookupd_url = endpoint + "/lookup?topic=" + urllib.quote(self.topic)
-            req = tornado.httpclient.HTTPRequest(lookupd_url, method="GET",
-                        connect_timeout=1, request_timeout=2)
-            callback = functools.partial(self._finish_query_lookupd, endpoint=endpoint)
-            self.http_client.fetch(req, callback=callback)
+        endpoint = self.lookupd_http_addresses[self.lookupd_query_index]
+        self.lookupd_query_index = (self.lookupd_query_index + 1) % len(self.lookupd_http_addresses)
+        lookupd_url = endpoint + "/lookup?topic=" + urllib.quote(self.topic)
+        req = tornado.httpclient.HTTPRequest(lookupd_url, method="GET",
+                    connect_timeout=1, request_timeout=2)
+        callback = functools.partial(self._finish_query_lookupd, lookupd_url=lookupd_url)
+        self.http_client.fetch(req, callback=callback)
     
-    def _finish_query_lookupd(self, response, endpoint):
+    def _finish_query_lookupd(self, response, lookupd_url):
         if response.error:
-            logging.warning("[%s] lookupd %s query error: %s", self.name, endpoint, response.error)
+            logging.warning("[%s] lookupd %s query error: %s", self.name, lookupd_url, response.error)
             return
         
         try:
             lookup_data = json.loads(response.body)
         except ValueError:
-            logging.warning("[%s] lookupd %s failed to parse JSON: %r", self.name, endpoint, response.body)
+            logging.warning("[%s] lookupd %s failed to parse JSON: %r", self.name, lookupd_url, response.body)
             return
         
         if lookup_data['status_code'] != 200:
-            logging.warning("[%s] lookupd %s responded with %d", self.name, endpoint, lookup_data['status_code'])
+            logging.warning("[%s] lookupd %s responded with %d", self.name, lookupd_url, lookup_data['status_code'])
             return
         
         for producer in lookup_data['data']['producers']:
