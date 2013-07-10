@@ -15,6 +15,7 @@ in the 1.0 release), but for now the upgrade is as simple as:
 
     from nsq import LegacyReader as Reader
 
+ * #38 - fix edge case where conn would never get RDY; RDY fairness when # conns > max_in_flight
  * #36/#37 - refactor internal connection, backoff, and RDY handling
  * #29/#34/#35 - refactor public API (drop "tasks"); improve RDY count handling
  * #28/#31 - improve backoff handling
