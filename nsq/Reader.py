@@ -171,6 +171,7 @@ class Reader(object):
         self.lookupd_poll_interval = lookupd_poll_interval
         self.lookupd_poll_jitter = lookupd_poll_jitter
         self.heartbeat_interval = int(heartbeat_interval * 1000)
+        self.random_rdy_ts = time.time()
         
         self.backoff_timer = BackoffTimer.BackoffTimer(0, max_backoff_duration)
         self.backoff_timeout = None
@@ -313,7 +314,19 @@ class Reader(object):
         self.total_rdy = max(self.total_rdy - 1, 0)
         conn.in_flight += 1
         
-        self._maybe_update_rdy(conn)
+        rdy_conn = conn
+        if len(self.conns) > self.max_in_flight:
+            # if all connections aren't getting RDY
+            # occsionally randomize which connection gets RDY
+            time_since_random_rdy = time.time() - self.random_rdy_ts
+            if time_since_random_rdy > 30:
+                self.random_rdy_ts = time.time()
+                conns_with_no_rdy = [c for c in self.conns.itervalues() if not c.rdy]
+                rdy_conn = random.choice(conns_with_no_rdy)
+                if rdy_conn is not conn:
+                    logging.info('[%s:%s] redistributing RDY to %s', conn.id, self.name, rdy_conn.id)
+        
+        self._maybe_update_rdy(rdy_conn)
         
         success = False
         try:
@@ -383,7 +396,7 @@ class Reader(object):
         
         self.backoff_timeout = self.ioloop.add_timeout(time.time() + backoff_interval, self._finish_backoff_block)
     
-    def _rdy_disabled(self, conn, value):
+    def _rdy_retry(self, conn, value):
         conn.rdy_timeout = None
         self._send_rdy(conn, value)
     
@@ -394,14 +407,19 @@ class Reader(object):
         
         if value and self.disabled():
             logging.info('[%s:%s] disabled, delaying RDY state change', conn.id, self.name)
-            rdy_disabled_callback = functools.partial(self._rdy_disabled, conn, value)
-            conn.rdy_timeout = self.ioloop.add_timeout(time.time() + 15, rdy_disabled_callback)
+            rdy_retry_callback = functools.partial(self._rdy_retry, conn, value)
+            conn.rdy_timeout = self.ioloop.add_timeout(time.time() + 15, rdy_retry_callback)
             return
         
         if value > conn.max_rdy_count:
             value = conn.max_rdy_count
         
         if (self.total_rdy + value) > self.max_in_flight:
+            if not conn.rdy:
+                # if we're going from RDY 0 to non-0 and we couldn't because 
+                # of the configured max in flight, try again
+                rdy_retry_callback = functools.partial(self._rdy_retry, conn, value)
+                conn.rdy_timeout = self.ioloop.add_timeout(time.time() + 5, rdy_retry_callback)
             return
         
         try:
