@@ -8,6 +8,10 @@ import socket
 import functools
 import urllib
 import random
+try:
+    import ssl
+except ImportError:
+    ssl = None # pyflakes.ignore
 
 import tornado.ioloop
 import tornado.httpclient
@@ -120,12 +124,17 @@ class Reader(object):
     
     :param lookupd_poll_jitter: The maximum fractional amount of jitter to add to the lookupd pool loop.
         This helps evenly distribute requests even if multiple consumers restart at the same time.
+    
+    :param tls_v1: enable TLS v1 encryption (requires nsqd 0.2.22+)
+    
+    :param tls_options: dictionary of options to pass to `ssl.wrap_socket() 
+        <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as **kwargs
     """
     def __init__(self, topic, channel, message_handler=None, name=None,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                 max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=60,
                 low_rdy_idle_timeout=10, heartbeat_interval=30, max_backoff_duration=128,
-                lookupd_poll_jitter=0.3):
+                lookupd_poll_jitter=0.3, tls_v1=False, tls_options=None):
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
@@ -135,6 +144,8 @@ class Reader(object):
         assert isinstance(lookupd_poll_interval, int)
         assert isinstance(lookupd_poll_jitter, float)
         assert lookupd_poll_jitter >= 0 and lookupd_poll_jitter <= 1
+        assert isinstance(tls_options, (dict, None.__class__))
+        assert tls_v1 and ssl or not tls_v1, "tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl"
         
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
@@ -172,6 +183,8 @@ class Reader(object):
         self.lookupd_poll_jitter = lookupd_poll_jitter
         self.heartbeat_interval = int(heartbeat_interval * 1000)
         self.random_rdy_ts = time.time()
+        self.tls_v1 = tls_v1
+        self.tls_options = tls_options
         
         self.backoff_timer = BackoffTimer.BackoffTimer(0, max_backoff_duration)
         self.backoff_timeout = None
@@ -501,6 +514,7 @@ class Reader(object):
                 'long_id': self.hostname,
                 'heartbeat_interval': self.heartbeat_interval,
                 'feature_negotiation': True,
+                'tls_v1': self.tls_v1,
             }
             logging.info("[%s:%s] IDENTIFY sent %r", conn.id, self.name, identify_data)
             conn.send(nsq.identify(identify_data))
@@ -525,6 +539,17 @@ class Reader(object):
         if conn.max_rdy_count < self.max_in_flight:
             logging.warning("[%s:%s] max RDY count %d < reader max in flight %d, truncation possible",
                 conn.id, self.name, conn.max_rdy_count, self.max_in_flight)
+        
+        if self.tls_v1:
+            if data.get('tls_v1'):
+                conn.upgrade_to_tls(self.tls_options)
+                conn.response_callback_queue.append(self._upgrade_to_tls_callback)
+                return
+            logging.warning("[%s:%s] tls_v1 requested but disabled, could not negotiate feature", conn.id)
+        
+        self._conn_subscribe(conn)
+    
+    def _upgrade_to_tls_callback(self, conn, data):
         self._conn_subscribe(conn)
     
     def _conn_subscribe(self, conn):
