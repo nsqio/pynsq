@@ -22,6 +22,22 @@ class Writer(object):
     
     Writer publishes messages to the specified  ``nsqd_tcp_addresses`` asynchronously.
     
+    ``PUB`` message sent repeatedly using a Tornado IOLoop periodic callback::
+    
+        import nsq
+        import tornado.ioloop
+        import time
+        
+        def pub_message():
+            writer.pub('test', time.strftime('%H:%M:%S'), finish_pub)
+        
+        def finish_pub(conn, data):
+            print conn, data
+        
+        writer = nsq.Writer(["127.0.0.1:4150", ])
+        tornado.ioloop.PeriodicCallback(pub_message, 1000).start()
+        nsq.run()
+
     ``PUB`` message in a Tornado web handler example::
         
         import functools
