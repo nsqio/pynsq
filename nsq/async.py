@@ -1,9 +1,14 @@
 import socket
+try:
+    import ssl
+except ImportError:
+    ssl = None # pyflakes.ignore
 import struct
 import logging
 
 import tornado.iostream
 import tornado.ioloop
+import tornado.simple_httpclient
 
 import nsq
 
@@ -25,6 +30,13 @@ class AsyncConn(object):
         self.data_callback = data_callback
         self.close_callback = close_callback
         self.timeout = timeout
+    
+    @property
+    def id(self):
+        return str(self)
+    
+    def __str__(self):
+        return self.host + ':' + str(self.port)
     
     def connect(self):
         if self.connected or self.connecting:
@@ -82,9 +94,16 @@ class AsyncConn(object):
     def send(self, data):
         self.stream.write(data)
     
-    @property
-    def id(self):
-        return str(self)
-    
-    def __str__(self):
-        return self.host + ':' + str(self.port)
+    def upgrade_to_tls(self, options=None):
+        assert ssl, "tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl"
+        opts = {
+            'cert_reqs': ssl.CERT_REQUIRED, 
+            'ca_certs': tornado.simple_httpclient._DEFAULT_CA_CERTS
+        }
+        opts.update(options or {})
+        ssl_socket = ssl.wrap_socket(self.s, ssl_version=ssl.PROTOCOL_TLSv1, 
+            do_handshake_on_connect=False, **opts)
+        tornado.ioloop.IOLoop.instance().remove_handler(self.s.fileno())
+        self.stream = tornado.iostream.SSLIOStream(ssl_socket)
+        self.stream.set_close_callback(self._socket_close)
+        self.stream._do_ssl_handshake()
