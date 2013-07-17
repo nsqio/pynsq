@@ -18,11 +18,9 @@ import async
 class Writer(object):
     """
     A high-level producer class built on top of the `Tornado IOLoop <http://tornadoweb.org>`_
-    supporting async ``PUB`` & ``MPUB`` messages to ``nsqd``.
+    supporting async publishing (``PUB`` & ``MPUB``) of messages to ``nsqd`` over the TCP protocol.
     
-    Writer publishes messages to the specified  ``nsqd_tcp_addresses`` asynchronously.
-    
-    ``PUB`` message sent repeatedly using a Tornado IOLoop periodic callback::
+    Example publishing a message repeatedly using a Tornado IOLoop periodic callback::
     
         import nsq
         import tornado.ioloop
@@ -32,13 +30,13 @@ class Writer(object):
             writer.pub('test', time.strftime('%H:%M:%S'), finish_pub)
         
         def finish_pub(conn, data):
-            print conn, data
+            print data
         
-        writer = nsq.Writer(["127.0.0.1:4150", ])
+        writer = nsq.Writer(["127.0.0.1:4150"])
         tornado.ioloop.PeriodicCallback(pub_message, 1000).start()
         nsq.run()
-
-    ``PUB`` message in a Tornado web handler example::
+    
+    Example publshing a message from a Tornado HTTP request handler::
         
         import functools
         import tornado.httpserver
@@ -46,10 +44,7 @@ class Writer(object):
         import tornado.options
         import tornado.web
         from nsq import Writer, Error
-        
         from tornado.options import define, options
-        
-        define("port", default=8888, help="run on the given port", type=int)
         
         class MainHandler(tornado.web.RequestHandler):
             @property
@@ -74,27 +69,11 @@ class Writer(object):
                 if isinstance(data, Error):
                     # try to re-pub message again if pub failed
                     self.nsq.pub(topic, msg)
-    
         
         class Application(tornado.web.Application):
             def __init__(self, handlers, **settings):
-                self.nsq = Writer(["127.0.0.1:4150", ])
+                self.nsq = Writer(["127.0.0.1:4150"])
                 super(Application, self).__init__(handlers, **settings)
-    
-        
-        def main():
-            tornado.options.parse_command_line()
-            application = Application([
-                (r"/", MainHandler),
-            ])
-            http_server = tornado.httpserver.HTTPServer(application)
-            http_server.listen(options.port)
-            
-            tornado.ioloop.IOLoop.instance().start()
-    
-        
-        if __name__ == "__main__":
-            main()
     
     :param nsqd_tcp_addresses: a sequence of (addresses, port) of the ``nsqd`` instances this writer
         should publish to
@@ -131,7 +110,7 @@ class Writer(object):
     
     def _pub(self, command, topic, msg, callback):
         if not callback:
-            callback = functools.partial(self.finish_pub, command=command,
+            callback = functools.partial(self._finish_pub, command=command,
                                          topic=topic, msg=msg)
         
         conn = random.choice(self.conns.values())
@@ -248,18 +227,17 @@ class Writer(object):
             logging.warning("[%s] connection is stale (%.02fs), closing" % (conn.id, (now - timestamp)))
             conn.close()
     
+    def _finish_pub(self, conn, data, command, topic, msg):
+        if isinstance(data, nsq.Error):
+            logging.error('[%s] failed to %s (%s, %s), data is %s',
+                          conn.id, command, topic, msg, data)
+    
     #
     # subclass overwriteable
     #
     
     def heartbeat(self, conn):
         pass
-    
-    def finish_pub(self, conn, data, command, topic, msg):
-        """Default pub&mpub callback, overwrite it to do re-pub etc"""
-        if isinstance(data, nsq.Error):
-            logging.error('[%s] failed to %s (%s, %s), data is %s',
-                          conn.id, command, topic, msg, data)
 
 
 class DataError(nsq.Error):
