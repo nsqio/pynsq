@@ -25,7 +25,7 @@ def run():
     tornado.ioloop.IOLoop.instance().start()
 
 # also update in setup.py
-__version__ = '0.5.0-alpha'
+__version__ = '0.5.0'
 
 __author__ = "Matt Reiferson <snakes@gmail.com>"
 __all__ = ["Reader", "Writer", "run", "BackoffTimer", "Message", "Error", "LegacyReader",
