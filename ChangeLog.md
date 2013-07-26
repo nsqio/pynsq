@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0-alpha
+## 0.5.0 - 2013-07-26
 
 This release drops the concept of "tasks" in `Reader` (in favor of a single message handler). This
 greatly simplifies internal RDY state handling and is a cleaner API as we head towards 1.0.
@@ -15,6 +15,11 @@ in the 1.0 release), but for now the upgrade is as simple as:
 
     from nsq import LegacyReader as Reader
 
+Finally, TLS support is available via `tls_v1` and `tls_options` params to `Reader` (available in
+`nsqd` as of `0.2.22+`).
+
+ * #42 - TLS support
+ * #39 - distribute requests to lookupd
  * #38 - fix edge case where conn would never get RDY; RDY fairness when # conns > max_in_flight
  * #36/#37 - refactor internal connection, backoff, and RDY handling
  * #29/#34/#35 - refactor public API (drop "tasks"); improve RDY count handling
