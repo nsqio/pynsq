@@ -45,11 +45,13 @@ class Reader(object):
     :class:`nsq.Message` object that has instance methods :meth:`nsq.Message.finish`, 
     :meth:`nsq.Message.requeue`, and :meth:`nsq.Message.touch` to respond to ``nsqd``.
     
-    It is responsible for sending ``FIN`` or ``REQ`` commands based on return value of 
-    ``message_handler``. When re-queueing, an increasing delay will be calculated automatically.  
+    When messages are not responded to explicitly, it is responsible for sending 
+    ``FIN`` or ``REQ`` commands based on return value of  ``message_handler``. When 
+    re-queueing, it will backoff from processing additional messages for an increasing 
+    delay (calculated exponentially based on consecutive failures up to ``max_backoff_duration``).
     
-    Additionally, when message processing fails, it will backoff in increasing multiples of 
-    ``requeue_delay`` between updating of RDY count.
+    Additionally, when message processing fails, it will defer processing the failed message 
+    for an increasing multiple of ``requeue_delay``.
     
     Synchronous example::
         
@@ -650,7 +652,7 @@ class Reader(object):
             conn.close()
     
     def _redistribute_rdy_state(self):
-        # We redistribute RDY counts in two cases:
+        # We redistribute RDY counts in a few cases:
         # 
         # 1. our # of connections exceeds our configured max_in_flight
         # 2. we're in backoff mode (but not in a current backoff block)
