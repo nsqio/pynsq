@@ -162,7 +162,6 @@ class Writer(object):
                                self._data_callback, self._close_callback)
         conn.connect()
         
-        conn.id = conn_id
         conn.last_recv_timestamp = time.time()
         conn.callback_queue = []
         
