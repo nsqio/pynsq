@@ -75,8 +75,8 @@ class Writer(object):
                 self.nsq = Writer(["127.0.0.1:4150"])
                 super(Application, self).__init__(handlers, **settings)
     
-    :param nsqd_tcp_addresses: a sequence of (addresses, port) of the ``nsqd`` instances this writer
-        should publish to
+    :param nsqd_tcp_addresses: a sequence with elements of the form "address:port" corresponding
+        to the ``nsqd`` instances this writer should publish to
     
     :param heartbeat_interval: the interval in seconds to configure heartbeats w/ ``nsqd``
     """
