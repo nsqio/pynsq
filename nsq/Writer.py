@@ -113,6 +113,10 @@ class Writer(object):
             callback = functools.partial(self._finish_pub, command=command,
                                          topic=topic, msg=msg)
         
+        if not self.conns:
+            callback(None, SendError("No connections"))
+            return
+
         conn = random.choice(self.conns.values())
         try:
             cmd = getattr(nsq, command)
