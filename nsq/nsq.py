@@ -116,8 +116,10 @@ def _command(cmd, body, *params):
     body_data = ''
     params_data = ''
     if body:
+        assert isinstance(body, str), "body must be a string"
         body_data = struct.pack('>l', len(body)) + body
     if len(params):
+        params = [p.encode('utf-8') if isinstance(p, unicode) else p for p in params]
         params_data = ' ' + ' '.join(params)
     return "%s%s%s%s" % (cmd, params_data, NL, body_data)
 
