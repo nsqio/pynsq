@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1-alpha
+
+ * #48 - fix writer encoding issues
+ * #47 - fix writer uncaught exception when no connections to publish to
+ * #45 - fix writer id property
+
 ## 0.5.0 - 2013-07-26
 
 This release drops the concept of "tasks" in `Reader` (in favor of a single message handler). This
