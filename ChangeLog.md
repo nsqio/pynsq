@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.5.1-alpha
+## 0.5.1 - 2013-08-19
+
+This is a bug-fix release addressing a few issues in `Writer`.
 
  * #48 - fix writer encoding issues
  * #47 - fix writer uncaught exception when no connections to publish to
