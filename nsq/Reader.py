@@ -131,12 +131,14 @@ class Reader(object):
     
     :param tls_options: dictionary of options to pass to `ssl.wrap_socket() 
         <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as **kwargs
+    
+    :param snappy: enable Snappy stream compression (requires nsqd 0.2.23+)
     """
     def __init__(self, topic, channel, message_handler=None, name=None,
                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                 max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=60,
                 low_rdy_idle_timeout=10, heartbeat_interval=30, max_backoff_duration=128,
-                lookupd_poll_jitter=0.3, tls_v1=False, tls_options=None):
+                lookupd_poll_jitter=0.3, tls_v1=False, tls_options=None, snappy=False):
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
@@ -187,6 +189,7 @@ class Reader(object):
         self.random_rdy_ts = time.time()
         self.tls_v1 = tls_v1
         self.tls_options = tls_options
+        self.snappy = snappy
         
         self.backoff_timer = BackoffTimer.BackoffTimer(0, max_backoff_duration)
         self.backoff_timeout = None
@@ -517,6 +520,7 @@ class Reader(object):
                 'heartbeat_interval': self.heartbeat_interval,
                 'feature_negotiation': True,
                 'tls_v1': self.tls_v1,
+                'snappy': self.snappy
             }
             logging.info("[%s:%s] IDENTIFY sent %r", conn.id, self.name, identify_data)
             conn.send(nsq.identify(identify_data))
@@ -545,14 +549,28 @@ class Reader(object):
         if self.tls_v1:
             if data.get('tls_v1'):
                 conn.upgrade_to_tls(self.tls_options)
-                conn.response_callback_queue.append(self._upgrade_to_tls_callback)
+                callback = functools.partial(self._identify_continue_callback,
+                    enable_snappy=self.snappy, identify_data=data)
+                conn.response_callback_queue.append(callback)
                 return
-            logging.warning("[%s:%s] tls_v1 requested but disabled, could not negotiate feature", conn.id)
+            else:
+                logging.warning("[%s:%s] tls_v1 requested but disabled, could not negotiate feature",
+                    conn.id, self.name)
         
-        self._conn_subscribe(conn)
+        self._identify_continue_callback(conn, None, enable_snappy=self.snappy, identify_data=data)
     
-    def _upgrade_to_tls_callback(self, conn, data):
-        self._conn_subscribe(conn)
+    def _identify_continue_callback(self, conn, data, enable_snappy=False, identify_data=None):
+        if enable_snappy:
+            if (identify_data or {}).get('snappy'):
+                conn.upgrade_to_snappy()
+                conn.response_callback_queue.append(self._identify_continue_callback)
+                return
+            else:
+                logging.warning("[%s:%s] snappy requested but disabled, could not negotiate feature",
+                    conn.id, self.name)
+        
+        if not conn.response_callback_queue:
+            self._conn_subscribe(conn)
     
     def _conn_subscribe(self, conn):
         conn.send(nsq.subscribe(self.topic, self.channel))
