@@ -215,13 +215,14 @@ class Reader(object):
             address, port = addr.split(':')
             self.connect_to_nsqd(address, int(port))
         
+        tornado.ioloop.PeriodicCallback(self._redistribute_rdy_state, 5 * 1000).start()
+        tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000).start()
+        
         if not self.lookupd_http_addresses:
             return
         # trigger the first lookup query manually
         self.query_lookupd()
         
-        tornado.ioloop.PeriodicCallback(self._redistribute_rdy_state, 5 * 1000).start()
-        tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000).start()
         periodic = tornado.ioloop.PeriodicCallback(self.query_lookupd, self.lookupd_poll_interval * 1000)
         # randomize the time we start this poll loop so that all servers don't query at exactly the same time
         # randomize based on 30% of the interval
