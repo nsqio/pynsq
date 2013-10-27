@@ -4,7 +4,7 @@ try:
 except ImportError:
     ssl = None # pyflakes.ignore
 try:
-    from SnappySocket import SnappySocket
+    from snappy_socket import SnappySocket
 except ImportError:
     SnappySocket = None # pyflakes.ignore
 import struct

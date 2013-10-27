@@ -16,7 +16,7 @@ except ImportError:
 import tornado.ioloop
 import tornado.httpclient
 
-import BackoffTimer
+from backoff_timer import BackoffTimer
 import nsq
 import async
 
@@ -191,7 +191,7 @@ class Reader(object):
         self.tls_options = tls_options
         self.snappy = snappy
         
-        self.backoff_timer = BackoffTimer.BackoffTimer(0, max_backoff_duration)
+        self.backoff_timer = BackoffTimer(0, max_backoff_duration)
         self.backoff_timeout = None
         self.backoff_block = False
         
