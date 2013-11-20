@@ -20,6 +20,23 @@ class Error(Exception):
     pass
 
 
+class SendError(Error):
+    def __init__(self, msg, error=None):
+        self.msg = msg
+        self.error = error
+
+    def __str__(self):
+        return "SendError: %s (%s)" % (self.msg, self.error)
+
+
+class ConnectionClosedError(Error):
+    pass
+
+
+class IntegrityError(Error):
+    pass
+
+
 def unpack_response(data):
     frame = struct.unpack('>l', data[:4])[0]
     return frame, data[4:]

@@ -1,9 +1,7 @@
-TOUCH = '_touch'
-FIN = '_fin'
-REQ = '_req'
+from evented_mixin import EventedMixin
 
 
-class Message(object):
+class Message(EventedMixin):
     """
     A class representing a message received from ``nsqd``.
 
@@ -35,6 +33,8 @@ class Message(object):
         self.body = body
         self.timestamp = timestamp
         self.attempts = attempts
+        
+        super(Message, self).__init__()
 
     def enable_async(self):
         """
@@ -63,7 +63,7 @@ class Message(object):
         """
         assert not self._has_responded
         self._has_responded = True
-        self.respond(FIN)
+        self.trigger('finish', message=self)
 
     def requeue(self, **kwargs):
         """
@@ -74,15 +74,16 @@ class Message(object):
         :type backoff: bool
 
         :param delay: the amount of time (in seconds) that this message should be delayed
+            if -1 it will be calculated based on # of attempts
         :type delay: int
         """
         assert not self._has_responded
         self._has_responded = True
-        self.respond(REQ, **kwargs)
+        self.trigger('requeue', message=self, **kwargs)
 
     def touch(self):
         """
         Respond to ``nsqd`` that you need more time to process the message.
         """
         assert not self._has_responded
-        self.respond(TOUCH)
+        self.trigger('touch', message=self)

@@ -1,27 +1,24 @@
 import logging
+import time
+import functools
+import urllib
+import random
+
 try:
     import simplejson as json
 except ImportError:
     import json # pyflakes.ignore
-import time
-import socket
-import functools
-import urllib
-import random
-try:
-    import ssl
-except ImportError:
-    ssl = None # pyflakes.ignore
 
 import tornado.ioloop
 import tornado.httpclient
 
 from backoff_timer import BackoffTimer
+from client import Client
 import nsq
 import async
 
 
-class Reader(object):
+class Reader(Client):
     """
     Reader provides high-level functionality for building robust NSQ consumers in Python
     on top of the async module.
@@ -49,9 +46,6 @@ class Reader(object):
     ``FIN`` or ``REQ`` commands based on return value of  ``message_handler``. When 
     re-queueing, it will backoff from processing additional messages for an increasing 
     delay (calculated exponentially based on consecutive failures up to ``max_backoff_duration``).
-    
-    Additionally, when message processing fails, it will defer processing the failed message 
-    for an increasing multiple of ``requeue_delay``.
     
     Synchronous example::
         
@@ -110,46 +104,33 @@ class Reader(object):
     :param max_in_flight: the maximum number of messages this reader will pipeline for processing.
         this value will be divided evenly amongst the configured/discovered nsqd producers
     
-    :param requeue_delay: the base multiple used when re-queueing (multiplied by # of attempts)
-    
     :param lookupd_poll_interval: the amount of time in seconds between querying all of the supplied
         nsqlookupd instances.  a random amount of time based on thie value will be initially
         introduced in order to add jitter when multiple readers are running
     
-    :param low_rdy_idle_timeout: the amount of time in seconds to wait for a message from a producer
-        when in a state where RDY counts are re-distributed (ie. max_in_flight < num_producers)
-    
-    :param heartbeat_interval: the amount of time in seconds to negotiate with the connected
-        producers to send heartbeats (requires nsqd 0.2.19+)
-    
-    :param max_backoff_duration: the maximum time we will allow a backoff state to last in seconds
-    
     :param lookupd_poll_jitter: The maximum fractional amount of jitter to add to the lookupd pool loop.
         This helps evenly distribute requests even if multiple consumers restart at the same time.
     
-    :param tls_v1: enable TLS v1 encryption (requires nsqd 0.2.22+)
+    :param low_rdy_idle_timeout: the amount of time in seconds to wait for a message from a producer
+        when in a state where RDY counts are re-distributed (ie. max_in_flight < num_producers)
     
-    :param tls_options: dictionary of options to pass to `ssl.wrap_socket() 
-        <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as **kwargs
+    :param max_backoff_duration: the maximum time we will allow a backoff state to last in seconds
     
-    :param snappy: enable Snappy stream compression (requires nsqd 0.2.23+)
+    :param **kwargs: passed to :class:`nsq.AsyncConn` initialization
     """
     def __init__(self, topic, channel, message_handler=None, name=None,
-                nsqd_tcp_addresses=None, lookupd_http_addresses=None,
-                max_tries=5, max_in_flight=1, requeue_delay=90, lookupd_poll_interval=60,
-                low_rdy_idle_timeout=10, heartbeat_interval=30, max_backoff_duration=128,
-                lookupd_poll_jitter=0.3, tls_v1=False, tls_options=None, snappy=False):
+                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
+                 max_tries=5, max_in_flight=1, lookupd_poll_interval=60,
+                 low_rdy_idle_timeout=10, max_backoff_duration=128, lookupd_poll_jitter=0.3,
+                 **kwargs):
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
-        assert isinstance(heartbeat_interval, (int, float)) and heartbeat_interval >= 1
         assert isinstance(max_backoff_duration, (int, float)) and max_backoff_duration > 0
         assert isinstance(name, (str, unicode, None.__class__))
         assert isinstance(lookupd_poll_interval, int)
         assert isinstance(lookupd_poll_jitter, float)
         assert lookupd_poll_jitter >= 0 and lookupd_poll_jitter <= 1
-        assert isinstance(tls_options, (dict, None.__class__))
-        assert tls_v1 and ssl or not tls_v1, "tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl"
         
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
@@ -177,7 +158,6 @@ class Reader(object):
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
         self.lookupd_http_addresses = lookupd_http_addresses
         self.lookupd_query_index = 0
-        self.requeue_delay = int(requeue_delay * 1000)
         self.max_tries = max_tries
         self.max_in_flight = max_in_flight
         self.low_rdy_idle_timeout = low_rdy_idle_timeout
@@ -185,18 +165,13 @@ class Reader(object):
         self.need_rdy_redistributed = False
         self.lookupd_poll_interval = lookupd_poll_interval
         self.lookupd_poll_jitter = lookupd_poll_jitter
-        self.heartbeat_interval = int(heartbeat_interval * 1000)
         self.random_rdy_ts = time.time()
-        self.tls_v1 = tls_v1
-        self.tls_options = tls_options
-        self.snappy = snappy
+        self.conn_kwargs = kwargs
         
         self.backoff_timer = BackoffTimer(0, max_backoff_duration)
         self.backoff_timeout = None
         self.backoff_block = False
         
-        self.hostname = socket.gethostname()
-        self.short_hostname = self.hostname.split('.')[0]
         self.conns = {}
         self.connection_attempts = {}
         self.http_client = tornado.httpclient.AsyncHTTPClient()
@@ -216,7 +191,6 @@ class Reader(object):
             self.connect_to_nsqd(address, int(port))
         
         tornado.ioloop.PeriodicCallback(self._redistribute_rdy_state, 5 * 1000).start()
-        tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000).start()
         
         if not self.lookupd_http_addresses:
             return
@@ -237,67 +211,6 @@ class Reader(object):
         """
         assert callable(message_handler), "message_handler must be callable"
         self.message_handler = message_handler
-    
-    def _message_responder(self, response, message=None, conn=None, **kwargs):
-        """
-        This is the underlying implementation behind a message's instance methods
-        for responding to nsqd.
-        
-        In addition, we take care of backoff in the appropriate cases.  When this
-        happens, we set a failure on the backoff timer and set the RDY count to zero.
-        Once the backoff time has expired, we allow *one* of the connections let
-        a single message through to test the water.  This will continue until we
-        reach no backoff in which case we go back to the normal RDY count.
-        
-        NOTE: A calling a message's .finish() and .requeue() methods positively and
-        negatively impact the backoff state, respectively.  However, sending the
-        backoff=False keyword argument to .requeue() is considered neutral and
-        will not impact backoff state.
-        """
-        start_backoff_interval = self.backoff_timer.get_interval()
-        if response is nsq.FIN:
-            if not self.backoff_block:
-                self.backoff_timer.success()
-            self._finish(conn, message)
-        elif response is nsq.REQ:
-            if kwargs.get('backoff', True) and not self.backoff_block:
-                self.backoff_timer.failure()
-            self._requeue(conn, message, time_ms=kwargs.get('time_ms', -1))
-        elif response is nsq.TOUCH:
-            return self._touch(conn, message)
-        else:
-            raise TypeError("invalid NSQ response type: %s" % response)
-        
-        self._enter_continue_or_exit_backoff(start_backoff_interval)
-    
-    def _requeue(self, conn, message, time_ms=-1):
-        if message.attempts > self.max_tries:
-            self.giving_up(message)
-            return self._finish(conn, message)
-        
-        try:
-            conn.in_flight -= 1
-            # ms
-            requeue_delay = self.requeue_delay * message.attempts if time_ms < 0 else time_ms
-            conn.send(nsq.requeue(message.id, requeue_delay))
-        except Exception:
-            conn.close()
-            logging.exception('[%s:%s] failed to send requeue %s @ %d', conn.id, self.name, message.id, requeue_delay)
-    
-    def _finish(self, conn, message):
-        try:
-            conn.in_flight -= 1
-            conn.send(nsq.finish(message.id))
-        except Exception:
-            conn.close()
-            logging.exception('[%s:%s] failed to send finish %s', conn.id, self.name, message.id)
-    
-    def _touch(self, conn, message):
-        try:
-            conn.send(nsq.touch(message.id))
-        except Exception:
-            conn.close()
-            logging.exception('[%s:%s] failed to send touch %s', conn.id, self.name, message.id)
     
     def _connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
@@ -328,10 +241,14 @@ class Reader(object):
                 return True
         return False
     
+    def _on_message(self, conn, message, **kwargs):
+        try:
+            self._handle_message(conn, message)
+        except Exception:
+            logging.exception('[%s:%s] failed to handle_message() %r', conn.id, self.name, message)
+    
     def _handle_message(self, conn, message):
-        conn.rdy = max(conn.rdy - 1, 0)
         self.total_rdy = max(self.total_rdy - 1, 0)
-        conn.in_flight += 1
         
         rdy_conn = conn
         if len(self.conns) > self.max_in_flight:
@@ -351,6 +268,9 @@ class Reader(object):
         try:
             pre_processed_message = self.preprocess_message(message)
             if not self.validate_message(pre_processed_message):
+                return message.finish()
+            if message.attempts > self.max_tries:
+                self.giving_up(message)
                 return message.finish()
             success = self.process_message(message)
         except Exception:
@@ -386,7 +306,21 @@ class Reader(object):
             # for tests
             return conn
     
+    def _on_backoff_resume(self, success, **kwargs):
+        start_backoff_interval = self.backoff_timer.get_interval()
+        if success:
+            self.backoff_timer.success()
+        elif not self.backoff_block:
+            self.backoff_timer.failure()
+        self._enter_continue_or_exit_backoff(start_backoff_interval)
+    
     def _enter_continue_or_exit_backoff(self, start_backoff_interval):
+        # Take care of backoff in the appropriate cases.  When this
+        # happens, we set a failure on the backoff timer and set the RDY count to zero.
+        # Once the backoff time has expired, we allow *one* of the connections let
+        # a single message through to test the water.  This will continue until we
+        # reach no backoff in which case we go back to the normal RDY count.
+        
         current_backoff_interval = self.backoff_timer.get_interval()
         
         # do nothing
@@ -441,36 +375,8 @@ class Reader(object):
                 conn.rdy_timeout = self.ioloop.add_timeout(time.time() + 5, rdy_retry_callback)
             return
         
-        try:
-            conn.send(nsq.ready(value))
+        if conn.send_rdy(value):
             self.total_rdy = max(self.total_rdy - conn.rdy + value, 0)
-            conn.last_rdy = value
-            conn.rdy = value
-        except Exception:
-            conn.close()
-            logging.exception('[%s:%s] failed to send RDY', conn.id, self.name)
-    
-    def _data_callback(self, conn, raw_data):
-        conn.last_recv_timestamp = time.time()
-        frame, data  = nsq.unpack_response(raw_data)
-        if frame == nsq.FRAME_TYPE_MESSAGE:
-            conn.last_msg_timestamp = time.time()
-            message = nsq.decode_message(data)
-            message.respond = functools.partial(self._message_responder, message=message, conn=conn)
-            try:
-                self._handle_message(conn, message)
-            except Exception:
-                logging.exception('[%s:%s] failed to handle_message() %r', conn.id, self.name, message)
-        elif frame == nsq.FRAME_TYPE_RESPONSE and data == "_heartbeat_":
-            logging.info("[%s:%s] received heartbeat" % (conn.id, self.name))
-            self.heartbeat(conn)
-            conn.send(nsq.nop())
-        elif frame == nsq.FRAME_TYPE_RESPONSE:
-            if conn.response_callback_queue:
-                callback = conn.response_callback_queue.pop(0)
-                callback(conn, data)
-        elif frame == nsq.FRAME_TYPE_ERROR:
-            logging.error("[%s:%s] ERROR: %s" , conn.id, self.name, data)
     
     def connect_to_nsqd(self, host, port):
         """
@@ -482,10 +388,16 @@ class Reader(object):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         
-        conn = async.AsyncConn(host, port,
-            self._connect_callback,
-            self._data_callback,
-            self._close_callback)
+        conn = async.AsyncConn(host, port, **self.conn_kwargs)
+        conn.on('identify', self._on_connection_identify)
+        conn.on('identify_response', self._on_connection_identify_response)
+        conn.on('error', self._on_connection_error)
+        conn.on('close', self._on_connection_close)
+        conn.on('ready', self._on_connection_ready)
+        conn.on('message', self._on_message)
+        conn.on('heartbeat', self.heartbeat)
+        conn.on('backoff', functools.partial(self._on_backoff_resume, success=False))
+        conn.on('resume', functools.partial(self._on_backoff_resume, success=True))
         
         if conn.id in self.conns:
             return
@@ -498,88 +410,22 @@ class Reader(object):
             return
         self.connection_attempts[conn.id] = now
         
-        self._initialize_conn(conn)
         logging.info("[%s:%s] connecting to nsqd", conn.id, self.name)
         conn.connect()
-    
-    def _initialize_conn(self, conn):
-        conn.rdy_timeout = None
-        conn.last_recv_timestamp = time.time()
-        conn.last_msg_timestamp = time.time()
-        conn.response_callback_queue = []
-        conn.in_flight = 0
-        conn.rdy = 0
-        # for backwards compatibility when interacting with older nsqd
-        # (pre 0.2.20), default this to their hard-coded max
-        conn.max_rdy_count = 2500
-    
-    def _connect_callback(self, conn):
-        try:
-            identify_data = {
-                'short_id': self.short_hostname,
-                'long_id': self.hostname,
-                'heartbeat_interval': self.heartbeat_interval,
-                'feature_negotiation': True,
-                'tls_v1': self.tls_v1,
-                'snappy': self.snappy
-            }
-            logging.info("[%s:%s] IDENTIFY sent %r", conn.id, self.name, identify_data)
-            conn.send(nsq.identify(identify_data))
-            conn.response_callback_queue.append(self._identify_response_callback)
-        except Exception:
-            logging.exception('[%s:%s] failed to bootstrap connection', conn.id, self.name)
-            conn.close()
-    
-    def _identify_response_callback(self, conn, data):
-        if data == 'OK':
-            return self._conn_subscribe(conn)
         
-        try:
-            data = json.loads(data)
-        except ValueError:
-            logging.error("[%s:%s] failed to parse JSON from nsqd: %r", conn.id, self.name, data)
-            conn.close()
-            return
-        
-        logging.info('[%s:%s] IDENTIFY received %r' % (conn.id, self.name, data))
-        conn.max_rdy_count = data['max_rdy_count']
-        if conn.max_rdy_count < self.max_in_flight:
-            logging.warning("[%s:%s] max RDY count %d < reader max in flight %d, truncation possible",
-                conn.id, self.name, conn.max_rdy_count, self.max_in_flight)
-        
-        if self.tls_v1:
-            if data.get('tls_v1'):
-                conn.upgrade_to_tls(self.tls_options)
-                callback = functools.partial(self._identify_continue_callback,
-                    enable_snappy=self.snappy, identify_data=data)
-                conn.response_callback_queue.append(callback)
-                return
-            else:
-                logging.warning("[%s:%s] tls_v1 requested but disabled, could not negotiate feature",
-                    conn.id, self.name)
-        
-        self._identify_continue_callback(conn, None, enable_snappy=self.snappy, identify_data=data)
+        return conn
     
-    def _identify_continue_callback(self, conn, data, enable_snappy=False, identify_data=None):
-        if enable_snappy:
-            if (identify_data or {}).get('snappy'):
-                conn.upgrade_to_snappy()
-                conn.response_callback_queue.append(self._identify_continue_callback)
-                return
-            else:
-                logging.warning("[%s:%s] snappy requested but disabled, could not negotiate feature",
-                    conn.id, self.name)
-        
-        if not conn.response_callback_queue:
-            self._conn_subscribe(conn)
-    
-    def _conn_subscribe(self, conn):
+    def _on_connection_ready(self, conn, **kwargs):
         conn.send(nsq.subscribe(self.topic, self.channel))
         # re-check to make sure another connection didn't beat this one done
         if conn.id in self.conns:
             logging.warning("[%s:%s] connected to NSQ but another matching connection already exists", conn.id, self.name)
             conn.close()
             return
+        
+        if conn.max_rdy_count < self.max_in_flight:
+            logging.warning("[%s:%s] max RDY count %d < reader max in flight %d, truncation possible",
+                conn.id, self.name, conn.max_rdy_count, self.max_in_flight)
         
         self.conns[conn.id] = conn
         # we send an initial RDY of 1 up to our configured max_in_flight
@@ -594,7 +440,7 @@ class Reader(object):
             # (but always send it if we're the first)
             self._send_rdy(conn, 1)
     
-    def _close_callback(self, conn):
+    def _on_connection_close(self, conn, **kwargs):
         if conn.id in self.conns:
             del self.conns[conn.id]
         
@@ -653,22 +499,6 @@ class Reader(object):
             address = producer.get('broadcast_address', producer.get('address'))
             assert address
             self.connect_to_nsqd(address, producer['tcp_port'])
-    
-    def _check_last_recv_timestamps(self):
-        # this method takes care to get the list of stale connections then close
-        # so `conn.close()` doesn't modify the list of connections while we iterate them.
-        now = time.time()
-        def is_stale(conn):
-            timestamp = conn.last_recv_timestamp
-            return (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0)
-        
-        stale_connections = [conn for conn in self.conns.values() if is_stale(conn)]
-        for conn in stale_connections:
-            timestamp = conn.last_recv_timestamp
-            # this connection hasnt received data beyond
-            # the configured heartbeat interval, close it
-            logging.warning("[%s:%s] connection is stale (%.02fs), closing", conn.id, self.name, (now - timestamp))
-            conn.close()
     
     def _redistribute_rdy_state(self):
         # We redistribute RDY counts in a few cases:
@@ -775,7 +605,7 @@ class Reader(object):
         
         :param conn: the :class:`nsq.AsyncConn` over which the heartbeat was received
         """
-        pass
+        logging.info("[%s:%s] received heartbeat" % (conn.id, self.name))
     
     def validate_message(self, message):
         return True

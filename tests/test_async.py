@@ -16,15 +16,11 @@ import nsq
 
 # The functions below are meant to be used as specs for mocks of callbacks. Yay dynamic typing
 
-def one_arg_fxn(arg):
-    pass
-
-def two_arg_fxn(arg1, arg2):
+def f(*args, **kwargs):
     pass
 
 def _get_test_conn():
-    conn = nsq.async.AsyncConn('test', 4150, create_autospec(one_arg_fxn),
-        create_autospec(two_arg_fxn), create_autospec(one_arg_fxn))
+    conn = nsq.async.AsyncConn('test', 4150)
     # now set the stream attribute, which is ordinarily set in conn.connect()
     conn.stream = create_autospec(IOStream)
     return conn
@@ -36,33 +32,33 @@ def test_connect(mock_iostream, mock_socket):
     conn.connect()
     conn.stream.set_close_callback.assert_called_once_with(conn._socket_close)
     conn.stream.connect.assert_called_once_with((conn.host, conn.port), conn._connect_callback)
-    assert conn.connecting
-    assert not conn.connected
+    assert conn.state == 'CONNECTING'
 
     # now ensure that we will bail if we were already in a connecting or connected state
     conn = _get_test_conn()
-    conn.connecting = True
+    conn.state = 'CONNECTING'
     conn.connect()
     assert not conn.stream.set_close_callback.called
     assert not conn.stream.connect.called
 
     conn = _get_test_conn()
-    conn.connected = True
+    conn.state = 'CONNECTED'
     conn.connect()
     assert not conn.stream.set_close_callback.called
     assert not conn.stream.connect.called
 
 def test_connect_callback():
     conn = _get_test_conn()
-    # simulate having called `conn.connect` by setting `connecting` to True
-    conn.connecting = True
+    on_connect = create_autospec(f)
+    conn.on('connect', on_connect)
+    # simulate having called `conn.connect` by setting state to `connecting`
+    conn.state = 'CONNECTING'
     with patch.object(conn, '_start_read', autospec=True) as mock_start_read:
         conn._connect_callback()
-        assert not conn.connecting
-        assert conn.connected
+        assert conn.state == 'CONNECTED'
         conn.stream.write.assert_called_once_with(nsq.nsq.MAGIC_V2)
         mock_start_read.assert_called_once_with()
-        conn.connect_callback.assert_called_once_with(conn)
+        on_connect.assert_called_once_with(conn=conn)
 
 def test_start_read():
     conn = _get_test_conn()
@@ -86,20 +82,22 @@ def test_read_size():
 
 def test_read_body():
     conn = _get_test_conn()
+    on_data = create_autospec(f)
+    conn.on('data', on_data)
     # I won't autospec the mock below, it doesn't seem to want to behave. 
     # I only assert against one of its attrs anyway, which I will spec
     with patch('nsq.async.tornado.ioloop.IOLoop.instance') as mock_io_loop:
-        mock_ioloop_addcb = create_autospec(one_arg_fxn)
+        mock_ioloop_addcb = create_autospec(f)
         mock_io_loop.return_value.add_callback = mock_ioloop_addcb
-        data ='NSQ'
+        data = 'NSQ'
         conn._read_body(data)
-        conn.data_callback.assert_called_once_with(conn, data)
+        on_data.assert_called_once_with(conn=conn, data=data)
         mock_ioloop_addcb.assert_called_once_with(conn._start_read)
 
         # now test functionality when the data_callback fails
-        conn.data_callback.reset_mock()
+        on_data.reset_mock()
         mock_ioloop_addcb.reset_mock()
-        conn.data_callback.return_value = Exception("Boom.")
+        on_data.return_value = Exception("Boom.")
         conn._read_body(data)
         # verify that we still added callback for the next start_read
         mock_ioloop_addcb.assert_called_once_with(conn._start_read)
