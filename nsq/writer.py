@@ -1,27 +1,23 @@
 # -*- coding: utf-8 -*-
 import logging
-try:
-    import simplejson as json
-except ImportError:
-    import json  # pyflakes.ignore
 import time
-import socket
 import functools
 import random
 
 import tornado.ioloop
 
+from client import Client
 import nsq
 import async
 
 
-class Writer(object):
+class Writer(Client):
     """
     A high-level producer class built on top of the `Tornado IOLoop <http://tornadoweb.org>`_
     supporting async publishing (``PUB`` & ``MPUB``) of messages to ``nsqd`` over the TCP protocol.
     
     Example publishing a message repeatedly using a Tornado IOLoop periodic callback::
-    
+        
         import nsq
         import tornado.ioloop
         import time
@@ -78,25 +74,23 @@ class Writer(object):
     :param nsqd_tcp_addresses: a sequence with elements of the form "address:port" corresponding
         to the ``nsqd`` instances this writer should publish to
     
-    :param heartbeat_interval: the interval in seconds to configure heartbeats w/ ``nsqd``
+    :param **kwargs: passed to :class:`nsq.AsyncConn` initialization
     """
-    def __init__(self, nsqd_tcp_addresses, heartbeat_interval=30):
-        assert isinstance(heartbeat_interval, (int, float)) and heartbeat_interval >= 1
+    def __init__(self, nsqd_tcp_addresses, **kwargs):
         if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
             assert isinstance(nsqd_tcp_addresses, (str, unicode))
             nsqd_tcp_addresses = [nsqd_tcp_addresses]
         assert nsqd_tcp_addresses
         
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
-        self.heartbeat_interval = int(heartbeat_interval * 1000)
-        self.hostname = socket.gethostname()
-        self.short_hostname = self.hostname.split('.')[0]
         self.conns = {}
+        self.conn_kwargs = kwargs
         
+        self.ioloop.add_callback(self._run)
+    
+    def _run(self):
         logging.info("starting writer...")
         self.connect()
-        
-        tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000).start()
     
     def pub(self, topic, msg, callback=None):
         self._pub("pub", topic, msg, callback)
@@ -114,37 +108,20 @@ class Writer(object):
                                          topic=topic, msg=msg)
         
         if not self.conns:
-            callback(None, SendError("No connections"))
+            callback(None, nsq.SendError('no connections'))
             return
-
+        
         conn = random.choice(self.conns.values())
+        conn.callback_queue.append(callback)
+        cmd = getattr(nsq, command)
         try:
-            cmd = getattr(nsq, command)
             conn.send(cmd(topic, msg))
-            
-            conn.callback_queue.append(callback)
-        except Exception, error:
+        except Exception:
             logging.exception('[%s] failed to send %s' % (conn.id, command))
             conn.close()
-            
-            callback(conn, SendError(error))
     
-    def _data_callback(self, conn, raw_data):
-        do_callback = False
-        conn.last_recv_timestamp = time.time()
-        frame, data = nsq.unpack_response(raw_data)
-        if frame == nsq.FRAME_TYPE_RESPONSE and data == "_heartbeat_":
-            logging.info("[%s] received heartbeat", conn.id)
-            self.heartbeat(conn)
-            conn.send(nsq.nop())
-        elif frame == nsq.FRAME_TYPE_RESPONSE:
-            do_callback = True
-        elif frame == nsq.FRAME_TYPE_ERROR:
-            logging.error("[%s] ERROR: %s", conn.id, data)
-            data = DataError(data)
-            do_callback = True
-        
-        if do_callback and conn.callback_queue:
+    def _on_connection_response(self, conn, data, **kwargs):
+        if conn.callback_queue:
             callback = conn.callback_queue.pop(0)
             callback(conn, data)
     
@@ -157,78 +134,45 @@ class Writer(object):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         
-        conn_id = host + ':' + str(port)
-        if conn_id in self.conns:
+        conn = async.AsyncConn(host, port, **self.conn_kwargs)
+        conn.on('identify', self._on_connection_identify)
+        conn.on('identify_response', self._on_connection_identify_response)
+        conn.on('error', self._on_connection_response)
+        conn.on('response', self._on_connection_response)
+        conn.on('close', self._on_connection_close)
+        conn.on('ready', self._on_connection_ready)
+        conn.on('heartbeat', self.heartbeat)
+        
+        if conn.id in self.conns:
             return
         
-        logging.info("[%s] connecting to nsqd", conn_id)
-        conn = async.AsyncConn(host, port, self._connect_callback,
-                               self._data_callback, self._close_callback)
+        logging.info("[%s] connecting to nsqd", conn.id)
         conn.connect()
-        
-        conn.last_recv_timestamp = time.time()
         conn.callback_queue = []
-        
-        self.conns[conn_id] = conn
     
-    def _connect_callback(self, conn):
-        try:
-            identify_data = {
-                'short_id': self.short_hostname,
-                'long_id': self.hostname,
-                'heartbeat_interval': self.heartbeat_interval,
-                'feature_negotiation': True,
-            }
-            logging.info("[%s] IDENTIFY sent %r", conn.id, identify_data)
-            conn.send(nsq.identify(identify_data))
-            conn.callback_queue.append(self._identify_response_callback)
-        except Exception:
+    def _on_connection_ready(self, conn, **kwargs):
+        # re-check to make sure another connection didn't beat this one
+        if conn.id in self.conns:
+            logging.warning("[%s] connected but another matching connection already exists", conn.id)
             conn.close()
-            logging.exception('[%s] failed to bootstrap connection' % conn.id)
-    
-    def _identify_response_callback(self, conn, data):
-        if data == 'OK' or isinstance(data, nsq.Error):
             return
-        
-        try:
-            data = json.loads(data)
-        except ValueError:
-            logging.warning("[%s] failed to parse JSON from nsqd: %r", conn.id, data)
-            return
-        
-        logging.info('[%s] IDENTIFY received %r', conn.id, data)
+        self.conns[conn.id] = conn
     
-    def _close_callback(self, conn):
+    def _on_connection_close(self, conn, **kwargs):
         if conn.id in self.conns:
             del self.conns[conn.id]
-            
-            for callback in conn.callback_queue:
-                try:
-                    callback(conn, ConnectionClosedError())
-                except Exception, error:
-                    logging.exception("[%s] failed to callback: %s", conn.id, error)
+        
+        for callback in conn.callback_queue:
+            try:
+                callback(conn, nsq.ConnectionClosedError())
+            except Exception:
+                logging.exception("[%s] uncaught exception in callback", conn.id)
         
         logging.warning("[%s] connection closed", conn.id)
         logging.info("[%s] attempting to reconnect in 15s", conn.id)
         reconnect_callback = functools.partial(self.connect_to_nsqd,
             host=conn.host, port=conn.port)
         tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, reconnect_callback)
-    
-    def _check_last_recv_timestamps(self):
-        # this method takes care to get the list of stale connections then close
-        # so `conn.close()` doesn't modify the list of connections while we iterate them.
-        now = time.time()
-        def is_stale(conn):
-            timestamp = conn.last_recv_timestamp
-            return (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0)
-        
-        stale_connections = [conn for conn in self.conns.values() if is_stale(conn)]
-        for conn in stale_connections:
-            timestamp = conn.last_recv_timestamp
-            # this connection hasnt received data beyond
-            # the configured heartbeat interval, close it
-            logging.warning("[%s] connection is stale (%.02fs), closing" % (conn.id, (now - timestamp)))
-            conn.close()
     
     def _finish_pub(self, conn, data, command, topic, msg):
         if isinstance(data, nsq.Error):
@@ -240,22 +184,4 @@ class Writer(object):
     #
     
     def heartbeat(self, conn):
-        pass
-
-
-class DataError(nsq.Error):
-    def __init__(self, data):
-        self.data = data
-    
-    def __str__(self):
-        return "DataError: %s" % self.data
-
-class SendError(nsq.Error):
-    def __init__(self, error):
-        self.error = error
-    
-    def __str__(self):
-        return "SendError: %s" % self.error
-
-class ConnectionClosedError(nsq.Error):
-    pass
+        logging.info("[%s] received heartbeat", conn.id)

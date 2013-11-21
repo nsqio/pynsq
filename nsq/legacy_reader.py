@@ -1,5 +1,5 @@
 import warnings
-from Reader import Reader
+from reader import Reader
 
 
 class LegacyReader(object):

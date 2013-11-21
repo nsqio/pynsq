@@ -1,39 +1,87 @@
+import time
 import socket
+import struct
+import logging
+
 try:
     import ssl
 except ImportError:
     ssl = None # pyflakes.ignore
+
 try:
-    from SnappySocket import SnappySocket
+    from snappy_socket import SnappySocket
 except ImportError:
     SnappySocket = None # pyflakes.ignore
-import struct
-import logging
+
+try:
+    import simplejson as json
+except ImportError:
+    import json # pyflakes.ignore
 
 import tornado.iostream
 import tornado.ioloop
 import tornado.simple_httpclient
 
 import nsq
+from evented_mixin import EventedMixin
 
 
-class AsyncConn(object):
-    def __init__(self, host, port, connect_callback, data_callback, close_callback, timeout=1.0):
+class AsyncConn(EventedMixin):
+    """
+    Low level object representing a TCP connection to nsqd.
+    
+    When a message on this connection is requeued, it can calculate the delay automatically
+    by an increasing multiple of ``requeue_delay``.
+    
+    :param host: the host to connect to
+    
+    :param port: the post to connect to
+    
+    :param timeout: the timeout for read/write operations (in seconds)
+    
+    :param heartbeat_interval: the amount of time in seconds to negotiate with the connected
+        producers to send heartbeats (requires nsqd 0.2.19+)
+    
+    :param requeue_delay: the base multiple used when calculating requeue delay (multiplied by # of attempts)
+    
+    :param tls_v1: enable TLS v1 encryption (requires nsqd 0.2.22+)
+    
+    :param tls_options: dictionary of options to pass to `ssl.wrap_socket() 
+        <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as **kwargs
+    
+    :param snappy: enable Snappy stream compression (requires nsqd 0.2.23+)
+    """
+    def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
+                 tls_v1=False, tls_options=None, snappy=False):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
-        assert callable(connect_callback)
-        assert callable(data_callback)
-        assert callable(close_callback)
         assert isinstance(timeout, float)
+        assert isinstance(tls_options, (dict, None.__class__))
+        assert isinstance(heartbeat_interval, int) and heartbeat_interval >= 1
+        assert isinstance(requeue_delay, int) and requeue_delay >= 0
+        assert tls_v1 and ssl or not tls_v1, 'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
         
-        self.connecting = False
-        self.connected = False
+        self.state = 'INIT'
         self.host = host
         self.port = port
-        self.connect_callback = connect_callback
-        self.data_callback = data_callback
-        self.close_callback = close_callback
         self.timeout = timeout
+        self.last_recv_timestamp = time.time()
+        self.last_msg_timestamp = time.time()
+        self.in_flight = 0
+        self.rdy = 0
+        self.rdy_timeout = None
+        # for backwards compatibility when interacting with older nsqd
+        # (pre 0.2.20), default this to their hard-coded max
+        self.max_rdy_count = 2500
+        self.tls_v1 = tls_v1
+        self.tls_options = tls_options
+        self.snappy = snappy
+        self.hostname = socket.gethostname()
+        self.short_hostname = self.hostname.split('.')[0]
+        self.heartbeat_interval = heartbeat_interval
+        self.requeue_delay = requeue_delay
+        
+        super(AsyncConn, self).__init__()
     
     @property
     def id(self):
@@ -43,7 +91,7 @@ class AsyncConn(object):
         return self.host + ':' + str(self.port)
     
     def connect(self):
-        if self.connected or self.connecting:
+        if self.state not in ['INIT', 'DISCONNECTED']:
             return
         
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -53,31 +101,27 @@ class AsyncConn(object):
         self.stream = tornado.iostream.IOStream(self.socket)
         self.stream.set_close_callback(self._socket_close)
         
-        self.connecting = True
+        self.state = 'CONNECTING'
+        
+        self.on('connect', self._on_connect)
+        self.on('data', self._on_data)
+        
         self.stream.connect((self.host, self.port), self._connect_callback)
     
     def _connect_callback(self):
-        self.connecting = False
-        self.connected = True
+        self.state = 'CONNECTED'
         self.stream.write(nsq.MAGIC_V2)
         self._start_read()
-        try:
-            self.connect_callback(self)
-        except Exception:
-            logging.exception("uncaught exception in connect_callback")
+        self.trigger('connect', conn=self)
     
     def _start_read(self):
         self.stream.read_bytes(4, self._read_size)
     
     def _socket_close(self):
-        self.connected = False
-        try:
-            self.close_callback(self)
-        except Exception:
-            logging.exception("uncaught exception in close_callback")
+        self.state = 'DISCONNECTED'
+        self.trigger('close', conn=self)
     
     def close(self):
-        self.connected = False
         self.stream.close()
     
     def _read_size(self, data):
@@ -86,13 +130,13 @@ class AsyncConn(object):
             self.stream.read_bytes(size, self._read_body)
         except Exception:
             self.close()
-            logging.exception("failed to unpack size")
+            self.trigger('error', nsq.IntegrityError('failed to unpack size'))
     
     def _read_body(self, data):
         try:
-            self.data_callback(self, data)
+            self.trigger('data', conn=self, data=data)
         except Exception:
-            logging.exception("uncaught exception in data_callback")
+            logging.exception('uncaught exception in data event')
         tornado.ioloop.IOLoop.instance().add_callback(self._start_read)
     
     def send(self, data):
@@ -137,3 +181,122 @@ class AsyncConn(object):
         self.socket = SnappySocket(self.socket)
         self.socket.bootstrap(existing_data)
         self.stream.socket = self.socket
+    
+    def send_rdy(self, value):
+        try:
+            self.send(nsq.ready(value))
+        except Exception, e:
+            self.close()
+            self.trigger('error', conn=self, error=nsq.SendError('failed to send RDY %d' % value, e))
+            return False
+        self.last_rdy = value
+        self.rdy = value
+        return True
+    
+    def _on_connect(self, **kwargs):
+        identify_data = {
+            'short_id': self.short_hostname,
+            'long_id': self.hostname,
+            'heartbeat_interval': self.heartbeat_interval,
+            'feature_negotiation': True,
+            'tls_v1': self.tls_v1,
+            'snappy': self.snappy
+        }
+        self.trigger('identify', conn=self, data=identify_data)
+        self.on('response', self._on_identify_response)
+        try:
+            self.send(nsq.identify(identify_data))
+        except Exception, e:
+            self.close()
+            self.trigger('error', conn=self, error=nsq.SendError('failed to bootstrap connection', e))
+    
+    def _on_identify_response(self, data, **kwargs):
+        self.off('response', self._on_identify_response)
+        
+        if data == 'OK':
+            return self.trigger('ready', conn=self)
+        
+        try:
+            data = json.loads(data)
+        except ValueError:
+            self.close()
+            self.trigger('error', conn=self,
+                error=nsq.IntegrityError('failed to parse IDENTIFY response JSON from nsqd - %r' % data))
+            return
+        
+        self.trigger('identify_response', conn=self, data=data)
+        
+        self._features_to_enable = []
+        if self.tls_v1 and data.get('tls_v1'):
+            self._features_to_enable.append('tls_v1')
+        if self.snappy and data.get('snappy'):
+            self._features_to_enable.append('snappy')
+        
+        self.on('response', self._on_response_continue)
+        self._on_response_continue(conn=self, data=None)
+    
+    def _on_response_continue(self, data, **kwargs):
+        if self._features_to_enable:
+            feature = self._features_to_enable.pop(0)
+            if feature == 'tls_v1':
+                self.upgrade_to_tls(self.tls_options)
+            elif feature == 'snappy':
+                self.upgrade_to_snappy()
+            return
+        
+        self.off('response', self._on_response_continue)
+        self.trigger('ready', conn=self)
+    
+    def _on_data(self, data, **kwargs):
+        self.last_recv_timestamp = time.time()
+        frame, data  = nsq.unpack_response(data)
+        if frame == nsq.FRAME_TYPE_MESSAGE:
+            self.last_msg_timestamp = time.time()
+            self.rdy = max(self.rdy - 1, 0)
+            self.in_flight += 1
+            
+            message = nsq.decode_message(data)
+            message.on('finish', self._on_message_finish)
+            message.on('requeue', self._on_message_requeue)
+            message.on('touch', self._on_message_touch)
+            
+            self.trigger('message', conn=self, message=message)
+        elif frame == nsq.FRAME_TYPE_RESPONSE and data == "_heartbeat_":
+            self.send(nsq.nop())
+            self.trigger('heartbeat', conn=self)
+        elif frame == nsq.FRAME_TYPE_RESPONSE:
+            self.trigger('response', conn=self, data=data)
+        elif frame == nsq.FRAME_TYPE_ERROR:
+            self.trigger('error', conn=self, error=nsq.Error(data))
+    
+    def _on_message_requeue(self, message, backoff=True, time_ms=-1, **kwargs):
+        self.in_flight -= 1
+        try:
+            time_ms = self.requeue_delay * message.attempts * 1000 if time_ms < 0 else time_ms
+            self.send(nsq.requeue(message.id, time_ms))
+        except Exception, e:
+            self.close()
+            self.trigger('error', conn=self,
+                error=nsq.SendError('failed to send REQ %s @ %d' % (message.id, time_ms), e))
+        
+        if backoff:
+            self.trigger('backoff', conn=self)
+    
+    def _on_message_finish(self, message, **kwargs):
+        self.in_flight -= 1
+        try:
+            self.send(nsq.finish(message.id))
+        except Exception, e:
+            self.close()
+            self.trigger('error', conn=self,
+                error=nsq.SendError('failed to send FIN %s' % message.id, e))
+        
+        self.trigger('resume', conn=self)
+    
+    def _on_message_touch(self, message, **kwargs):
+        try:
+            self.send(nsq.touch(message.id))
+        except Exception, e:
+            self.close()
+            self.trigger('error', conn=self,
+                error=nsq.SendError('failed to send TOUCH %s' % message.id, e))
