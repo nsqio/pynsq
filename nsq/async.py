@@ -50,15 +50,26 @@ class AsyncConn(EventedMixin):
         <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as **kwargs
     
     :param snappy: enable Snappy stream compression (requires nsqd 0.2.23+)
+    
+    :param output_buffer_size: size of the buffer (in bytes) used by nsqd for buffering writes
+        to this connection
+    
+    :param output_buffer_timeout: timeout (in ms) used by nsqd before flushing buffered writes
+        (set to 0 to disable).  **Warning**: configuring clients with an extremely low (``< 25ms``)
+        ``output_buffer_timeout`` has a significant effect on ``nsqd`` CPU usage (particularly
+        with ``> 50`` clients connected).
     """
     def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
-                 tls_v1=False, tls_options=None, snappy=False):
+                 tls_v1=False, tls_options=None, snappy=False,
+                 output_buffer_size=16 * 1024, output_buffer_timeout=250):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
         assert isinstance(tls_options, (dict, None.__class__))
         assert isinstance(heartbeat_interval, int) and heartbeat_interval >= 1
         assert isinstance(requeue_delay, int) and requeue_delay >= 0
+        assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
+        assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert tls_v1 and ssl or not tls_v1, 'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
         
         self.state = 'INIT'
@@ -80,7 +91,10 @@ class AsyncConn(EventedMixin):
         self.short_hostname = self.hostname.split('.')[0]
         self.heartbeat_interval = heartbeat_interval
         self.requeue_delay = requeue_delay
-        
+
+        self.output_buffer_size = output_buffer_size
+        self.output_buffer_timeout = output_buffer_timeout
+
         super(AsyncConn, self).__init__()
     
     @property
@@ -200,7 +214,9 @@ class AsyncConn(EventedMixin):
             'heartbeat_interval': self.heartbeat_interval,
             'feature_negotiation': True,
             'tls_v1': self.tls_v1,
-            'snappy': self.snappy
+            'snappy': self.snappy,
+            'output_buffer_timeout': self.output_buffer_timeout,
+            'output_buffer_size': self.output_buffer_size
         }
         self.trigger('identify', conn=self, data=identify_data)
         self.on('response', self._on_identify_response)
