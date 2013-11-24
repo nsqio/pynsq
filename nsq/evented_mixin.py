@@ -26,7 +26,7 @@ class EventedMixin(object):
         :param callback: the callback to execute when the event is triggered
         :type callback: callable
         """
-        assert callable(callback), "callback is not callable"
+        assert callable(callback), 'callback is not callable'
         if callback in self.__listeners[name]:
             raise DuplicateListenerError
         self.__listeners[name].append(callback)

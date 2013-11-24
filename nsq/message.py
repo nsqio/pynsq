@@ -8,9 +8,9 @@ class Message(EventedMixin):
     If you want to perform asynchronous message processing use the
     :meth:`nsq.Message.enable_async` method, pass the message around,
     and respond using the appropriate instance method.
-    
+
     Generates the following events that can be listened to with :meth:`nsq.Message.on`:
-    
+
      * ``finish``
      * ``requeue``
      * ``touch``
@@ -38,11 +38,11 @@ class Message(EventedMixin):
     :ivar body: the raw message body (from the parameter).
     :type body: string
 
-    :ivar timestamp: the timestamp the message was produced 
+    :ivar timestamp: the timestamp the message was produced
                      (from the parameter).
     :type timestamp: int
 
-    :ivar attempts: the number of times this message was attempted 
+    :ivar attempts: the number of times this message was attempted
                     (from the parameter).
     :type attempts: int
     """
@@ -53,14 +53,15 @@ class Message(EventedMixin):
         self.body = body
         self.timestamp = timestamp
         self.attempts = attempts
-        
+
         super(Message, self).__init__()
 
     def enable_async(self):
         """
         Enables asynchronous processing for this message.
 
-        :class:`nsq.Reader` will not automatically respond to the message upon return of ``message_handler``.
+        :class:`nsq.Reader` will not automatically respond to the message
+        upon return of ``message_handler``.
         """
         self._async_enabled = True
 

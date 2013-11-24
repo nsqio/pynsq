@@ -10,7 +10,7 @@ class MockSocket:
         self.lines = []
         self.conn = None
         self.timeout = None
-    
+
     def connect(self, addr):
         pass
 

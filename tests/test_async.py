@@ -14,16 +14,18 @@ if base_dir not in sys.path:
 
 import nsq
 
-# The functions below are meant to be used as specs for mocks of callbacks. Yay dynamic typing
 
+# The functions below are meant to be used as specs for mocks of callbacks. Yay dynamic typing
 def f(*args, **kwargs):
     pass
+
 
 def _get_test_conn():
     conn = nsq.async.AsyncConn('test', 4150)
     # now set the stream attribute, which is ordinarily set in conn.connect()
     conn.stream = create_autospec(IOStream)
     return conn
+
 
 @patch('nsq.async.socket', autospec=True)
 @patch('nsq.async.tornado.iostream.IOStream', autospec=True)
@@ -47,6 +49,7 @@ def test_connect(mock_iostream, mock_socket):
     assert not conn.stream.set_close_callback.called
     assert not conn.stream.connect.called
 
+
 def test_connect_callback():
     conn = _get_test_conn()
     on_connect = create_autospec(f)
@@ -60,10 +63,12 @@ def test_connect_callback():
         mock_start_read.assert_called_once_with()
         on_connect.assert_called_once_with(conn=conn)
 
+
 def test_start_read():
     conn = _get_test_conn()
     conn._start_read()
     conn.stream.read_bytes.assert_called_once_with(4, conn._read_size)
+
 
 def test_read_size():
     conn = _get_test_conn()
@@ -80,11 +85,12 @@ def test_read_size():
         mock_close.assert_called_once_with()
         assert not conn.stream.read_bytes.called
 
+
 def test_read_body():
     conn = _get_test_conn()
     on_data = create_autospec(f)
     conn.on('data', on_data)
-    # I won't autospec the mock below, it doesn't seem to want to behave. 
+    # I won't autospec the mock below, it doesn't seem to want to behave.
     # I only assert against one of its attrs anyway, which I will spec
     with patch('nsq.async.tornado.ioloop.IOLoop.instance') as mock_io_loop:
         mock_ioloop_addcb = create_autospec(f)

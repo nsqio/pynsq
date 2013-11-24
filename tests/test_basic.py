@@ -20,7 +20,7 @@ def pytest_generate_tests(metafunc):
                 ('test-with_period.', True),
                 ('test#ephemeral', False),
                 ('test:ephemeral', False),
-            ]:
+                ]:
             metafunc.addcall(funcargs=dict(name=name, good=good))
     if metafunc.function == test_channel_names:
         for name, good in [
@@ -29,14 +29,17 @@ def pytest_generate_tests(metafunc):
                 ('test#ephemeral', True),
                 ('invalid_name_due_to_length_this_is_really_long', False),
                 ('invalid name with space', False),
-            ]:
+                ]:
             metafunc.addcall(funcargs=dict(name=name, good=good))
+
 
 def test_topic_names(name, good):
     assert nsq.valid_topic_name(name) == good
 
+
 def test_channel_names(name, good):
     assert nsq.valid_channel_name(name) == good
+
 
 def test_backoff_timer():
     timer = BackoffTimer(.1, 120, long_length=1000)
@@ -49,7 +52,7 @@ def test_backoff_timer():
     assert timer.min_interval == Decimal('.1')
     assert timer.short_interval == Decimal('2.9975')
     assert timer.long_interval == Decimal('0.089925')
-    
+
     timer.failure()
     interval = '%0.2f' % timer.get_interval()
     assert interval == '6.27'
