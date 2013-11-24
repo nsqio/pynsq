@@ -9,3 +9,4 @@ Producers
 
 .. autoclass:: nsq.Writer
   :members:
+  :inherited-members:

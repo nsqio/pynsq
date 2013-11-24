@@ -30,8 +30,22 @@ class AsyncConn(EventedMixin):
     """
     Low level object representing a TCP connection to nsqd.
     
-    When a message on this connection is requeued, it can calculate the delay automatically
-    by an increasing multiple of ``requeue_delay``.
+    When a message on this connection is requeued and the requeue delay has not been specified,
+    it calculates the delay automatically by an increasing multiple of ``requeue_delay``.
+    
+    Generates the following events that can be listened to with :meth:`nsq.AsyncConn.on`:
+    
+     * ``connect``
+     * ``close``
+     * ``error``
+     * ``identify``
+     * ``identify_response``
+     * ``heartbeat``
+     * ``ready``
+     * ``message``
+     * ``response``
+     * ``backoff``
+     * ``resume``
     
     :param host: the host to connect to
     
@@ -47,7 +61,7 @@ class AsyncConn(EventedMixin):
     :param tls_v1: enable TLS v1 encryption (requires nsqd 0.2.22+)
     
     :param tls_options: dictionary of options to pass to `ssl.wrap_socket() 
-        <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as **kwargs
+        <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as ``**kwargs``
     
     :param snappy: enable Snappy stream compression (requires nsqd 0.2.23+)
     

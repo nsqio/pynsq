@@ -9,3 +9,4 @@ Consumers
 
 .. autoclass:: nsq.Reader
   :members:
+  :inherited-members:

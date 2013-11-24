@@ -8,11 +8,17 @@ class Message(EventedMixin):
     If you want to perform asynchronous message processing use the
     :meth:`nsq.Message.enable_async` method, pass the message around,
     and respond using the appropriate instance method.
+    
+    Generates the following events that can be listened to with :meth:`nsq.Message.on`:
+    
+     * ``finish``
+     * ``requeue``
+     * ``touch``
 
-    NOTE: A calling a message's .finish() and .requeue() methods positively and
-    negatively impact the backoff state, respectively.  However, sending the
-    backoff=False keyword argument to .requeue() is considered neutral and
-    will not impact backoff state.
+    NOTE: A calling a message's :meth:`nsq.Message.finish()` and :meth:`nsq.Message.requeue()`
+    methods positively and negatively impact the backoff state, respectively.  However,
+    sending the ``backoff=False`` keyword argument to :meth:`nsq.Message.requeue()` is
+    considered neutral and will not impact backoff state.
 
     :param id: the ID of the message
     :type id: string

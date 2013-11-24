@@ -3,3 +3,4 @@
 
 .. autoclass:: nsq.Message
   :members:
+  :inherited-members:

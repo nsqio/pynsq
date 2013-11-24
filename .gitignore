@@ -2,3 +2,4 @@ dist
 *.pyc
 pynsq.egg-info
 build
+docs/_build

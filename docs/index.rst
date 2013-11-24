@@ -17,6 +17,7 @@ Contents:
    :maxdepth: 2
    
    message
+   async_conn
    reader
    writer
    legacy_reader
