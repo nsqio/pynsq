@@ -25,6 +25,20 @@ class Message(EventedMixin):
 
     :param attempts: the number of times this message was attempted
     :type attempts: int
+
+    :ivar id: the ID of the message (from the parameter).
+    :type id: string
+
+    :ivar body: the raw message body (from the parameter).
+    :type body: string
+
+    :ivar timestamp: the timestamp the message was produced 
+                     (from the parameter).
+    :type timestamp: int
+
+    :ivar attempts: the number of times this message was attempted 
+                    (from the parameter).
+    :type attempts: int
     """
     def __init__(self, id, body, timestamp, attempts):
         self._async_enabled = False
