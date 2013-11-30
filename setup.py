@@ -34,4 +34,7 @@ setup(
     zip_safe=False,
     tests_require=['pytest', 'mock', 'tornado'],
     cmdclass={'test': PyTest},
+    classifiers=[
+        'License :: OSI Approved :: MIT License'
+    ]
 )
