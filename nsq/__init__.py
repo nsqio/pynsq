@@ -28,7 +28,7 @@ def run():
 
 
 # also update in setup.py
-__version__ = '0.5.1'
+__version__ = '0.6.0-alpha'
 __author__ = "Matt Reiferson <snakes@gmail.com>"
 __all__ = ["Reader", "Writer", "run", "BackoffTimer", "Message", "Error", "LegacyReader",
            "SyncConn", "AsyncConn", "unpack_response", "decode_message",
