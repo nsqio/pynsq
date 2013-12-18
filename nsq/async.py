@@ -73,10 +73,16 @@ class AsyncConn(EventedMixin):
         (set to 0 to disable).  **Warning**: configuring clients with an extremely low (``< 25ms``)
         ``output_buffer_timeout`` has a significant effect on ``nsqd`` CPU usage (particularly
         with ``> 50`` clients connected).
+
+    :param sample_rate: take only a sample of the messages being sent to the client. Not setting
+        this or setting it to 0 will ensure you get all the messages destined for the client.
+        Sample rate can be greater than 0 or less than 100 and the client will receive that
+        percentage of the message traffic. (requires nsqd 0.2.25+)
+
     """
     def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
                  tls_v1=False, tls_options=None, snappy=False,
-                 output_buffer_size=16 * 1024, output_buffer_timeout=250):
+                 output_buffer_size=16 * 1024, output_buffer_timeout=250, sample_rate=0):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -85,6 +91,7 @@ class AsyncConn(EventedMixin):
         assert isinstance(requeue_delay, int) and requeue_delay >= 0
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
+        assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
 
@@ -110,6 +117,7 @@ class AsyncConn(EventedMixin):
 
         self.output_buffer_size = output_buffer_size
         self.output_buffer_timeout = output_buffer_timeout
+        self.sample_rate = sample_rate
 
         super(AsyncConn, self).__init__()
 
@@ -232,7 +240,8 @@ class AsyncConn(EventedMixin):
             'tls_v1': self.tls_v1,
             'snappy': self.snappy,
             'output_buffer_timeout': self.output_buffer_timeout,
-            'output_buffer_size': self.output_buffer_size
+            'output_buffer_size': self.output_buffer_size,
+            'sample_rate': self.sample_rate
         }
         self.trigger('identify', conn=self, data=identify_data)
         self.on('response', self._on_identify_response)
