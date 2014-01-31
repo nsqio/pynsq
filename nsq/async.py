@@ -3,6 +3,8 @@ import socket
 import struct
 import logging
 
+from version import __version__
+
 try:
     import ssl
 except ImportError:
@@ -79,9 +81,12 @@ class AsyncConn(EventedMixin):
         Sample rate can be greater than 0 or less than 100 and the client will receive that
         percentage of the message traffic. (requires nsqd 0.2.25+)
 
+     :param user_agent: a string identifying the agent for this client in the spirit of
+        HTTP (default: "<client_library_name>/<version>") (requires nsqd 0.2.25+)
+
     """
     def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
-                 tls_v1=False, tls_options=None, snappy=False,
+                 tls_v1=False, tls_options=None, snappy=False, user_agent=None,
                  output_buffer_size=16 * 1024, output_buffer_timeout=250, sample_rate=0):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
@@ -118,6 +123,10 @@ class AsyncConn(EventedMixin):
         self.output_buffer_size = output_buffer_size
         self.output_buffer_timeout = output_buffer_timeout
         self.sample_rate = sample_rate
+        self.user_agent = user_agent
+
+        if self.user_agent is None:
+            self.user_agent = 'pynsq/%s' % __version__
 
         super(AsyncConn, self).__init__()
 
@@ -241,7 +250,8 @@ class AsyncConn(EventedMixin):
             'snappy': self.snappy,
             'output_buffer_timeout': self.output_buffer_timeout,
             'output_buffer_size': self.output_buffer_size,
-            'sample_rate': self.sample_rate
+            'sample_rate': self.sample_rate,
+            'user_agent': self.user_agent
         }
         self.trigger('identify', conn=self, data=identify_data)
         self.on('response', self._on_identify_response)
