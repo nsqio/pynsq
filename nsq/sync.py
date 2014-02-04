@@ -98,6 +98,7 @@ class SyncConn(object):
         self.__s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         if self.__is_ssl is True:
+# TODO(dustin): Test this.
             self.__s = ssl.wrap_socket(self.s, ca_certs=ssl_ca_certs, 
                                      cert_reqs=ssl.CERT_REQUIRED)
 
