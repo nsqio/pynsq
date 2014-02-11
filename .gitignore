@@ -3,3 +3,9 @@ dist
 pynsq.egg-info
 build
 docs/_build
+
+/bin
+/lib
+/include
+/local
+

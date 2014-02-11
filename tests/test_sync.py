@@ -13,6 +13,11 @@ import nsq
 nsq.sync.socket = mock_socket
 
 
+
+# TODO(dustin): Rewrite these for new sync logic.
+
+
+
 def mock_write(c, data):
     c.s.queue_recv(data)
 
