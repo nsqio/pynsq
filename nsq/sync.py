@@ -7,7 +7,7 @@ import ssl
 from datetime import datetime
 
 from nsq import MAGIC_V2, FRAME_TYPE_RESPONSE, FRAME_TYPE_ERROR, \
-                FRAME_TYPE_MESSAGE
+                FRAME_TYPE_MESSAGE, decode_message, unpack_response
 
 READ_CHUNK_SIZE = 4096
 
@@ -29,53 +29,51 @@ class NsqServerError(Exception):
         return self.__short_text
 
 
-class NsqMessage(object):
-    def __init__(self, s, data):
-        self.__s = s
-
-        header = struct.unpack('!QH16s', data[:26])
-
-        self.__timestamp = header[0] / 1000000000.0
-        self.__attempts = header[1]
-        self.__message_id = header[2]
-        self.__body = data[26:]
-
-    def __str__(self):
-        return ('<MSG ID=[%s] TIME=[%s] ATT=[%s] LEN=(%d)>' % 
-                (self.__message_id, self.timestamp_dt, self.__attempts, 
-                 len(self.__body)))
-
-    def finish(self):
-        """Mark the message as processed."""
-        return self.__s.send_fin(self.__message_id)
-
-    def requeue(self, timeout):
-        """Requeue the message."""
-        return self.__s.send_req(self.__message_id, timeout)
-
-    def extend(self):
-        """Ask for more time."""
-        return self.__s.send_touch(self.__message_id)
-
-    @property
-    def timestamp(self):
-        return self.__timestamp
-
-    @property
-    def attempts(self):
-        return self.__attempts
-
-    @property
-    def message_id(self):
-        return self.__message_id
-
-    @property
-    def body(self):
-        return self.__body
-
-    @property
-    def timestamp_dt(self):
-        return datetime.fromtimestamp(int(self.__timestamp))
+#class NsqMessage(object):
+#    def __init__(self, s, id_, body, timestamp, attempts):
+#        self.__s = s
+#
+#        self.__timestamp = timestamp
+#        self.__attempts = attempts
+#        self.__message_id = id_
+#        self.__body = body
+#
+#    def __str__(self):
+#        return ('<MSG ID=[%s] TIME=[%s] ATT=[%s] LEN=(%d)>' % 
+#                (self.__message_id, self.timestamp, self.__attempts, 
+#                 len(self.__body)))
+#
+#    def finish(self):
+#        """Mark the message as processed."""
+#        return self.__s.send_fin(self.__message_id)
+#
+#    def requeue(self, timeout):
+#        """Requeue the message."""
+#        return self.__s.send_req(self.__message_id, timeout)
+#
+#    def extend(self):
+#        """Ask for more time."""
+#        return self.__s.send_touch(self.__message_id)
+#
+#    @property
+#    def timestamp(self):
+#        return self.__timestamp
+#
+#    @property
+#    def attempts(self):
+#        return self.__attempts
+#
+#    @property
+#    def message_id(self):
+#        return self.__message_id
+#
+#    @property
+#    def body(self):
+#        return self.__body
+#
+#    @property
+#    def timestamp_dt(self):
+#        return datetime.fromtimestamp(int(self.__timestamp))
 
 
 class SyncConn(object):
@@ -101,11 +99,12 @@ class SyncConn(object):
 # TODO(dustin): Test this.
             self.__s = ssl.wrap_socket(self.s, ca_certs=ssl_ca_certs, 
                                      cert_reqs=ssl.CERT_REQUIRED)
+# TODO(dustin): Implement Snappy.
 
         self.__s.settimeout(self.__timeout)
         self.__s.connect((host, port))
         
-        self.__send(MAGIC_V2)
+        self.send(MAGIC_V2)
 
     def __readn(self, size):
         while True:
@@ -126,7 +125,7 @@ class SyncConn(object):
         return struct.pack('>l', n)
 
     def __send_length(self, data):
-        self.__send(str(self.__pack_int(len(data))))
+        self.send(str(self.__pack_int(len(data))))
 
     def __read_response(self):
         packed_length = self.__readn(4)
@@ -135,29 +134,28 @@ class SyncConn(object):
         response = self.__readn(length)
         offset = 0
 
-        frame_type_packed = response[offset:offset + 4]
-        frame_type = struct.unpack('!l', frame_type_packed)[0]
-        offset += 4
-
-        data = response[offset:]
-
+        (frame_type, data) = unpack_response(response)
         if frame_type == FRAME_TYPE_ERROR:
             raise NsqServerError(data)
 
         return (frame_type, data)
 
-    def __send(self, data):
+    def send(self, data):
         self.__s.send(data)
 
-    def __dump_string(self, str_):
-        parts = []
-        for i in range(len(str_)):
-            parts.append('(%02X)' % (ord(str_[i])))
-
-        return ' '.join(parts)
+#    def __dump_string(self, str_):
+#        parts = []
+#        for i in range(len(str_)):
+#            parts.append('(%02X)' % (ord(str_[i])))
+#
+#        return ' '.join(parts)
 
     def __send_command(self, command, parameters=None, data=None, 
-                       *args, **kwargs):
+                     *args, **kwargs):
+        """Build and send a command. There exists a call to build commands in
+        the async code, but that's a module-private function (_command).
+        """
+
         command = command.upper()
 
         command_line = command
@@ -167,13 +165,13 @@ class SyncConn(object):
         self.__log("Sending: %s" % (command_line))
 
         command_line += "\n"
-        self.__send(command_line)
+        self.send(command_line)
 
         if data is not None:
             self.__send_length(data)
-            self.__send(data)
+            self.send(data)
 
-        return self.run_loop(reason='[' + command + ']', one_response=True)
+        return self.run_loop(one_response=True)
 
     def __send_json_command(self, command, data, *args, **kwargs):
         data_encoded = json.dumps(data)
@@ -188,12 +186,12 @@ class SyncConn(object):
 
         self.__log("Identify successful.")
 
-    def run_loop(self, reason, one_response=False):
+    def run_loop(self, one_response=False):
         """This doesn't really serve a purpose other than to hold the 
         connection open, and response to heartbeats.
         """
 
-        self.__log("Entering receive-loop (%s)." % (reason))
+        self.__log("Entering receive-loop.")
 
         data = None
         i = 0
@@ -206,13 +204,14 @@ class SyncConn(object):
                 self.__log("Message to be automatically handled: %s "
                            "\"%s\"" % (message, message.body))
 
-                message.finish()
+                self.__send_fin(message.id)
 
         def process_messages():
             while 1:
                 try:
                     message = message_queue.get(block=False)
                 except Queue.Empty:
+                    print("No queued messages.")
                     break
 
                 process_message(message)
@@ -221,16 +220,21 @@ class SyncConn(object):
             # Below, we continue whereever a received-message might not 
             # correspond to the command we sent.
 
+# TODO(dustin): Use greenlets.
+
             try:
                 (frame_type, data) = self.__read_response()
             except socket.timeout:
                 pass
             else:
+                # We only handle the incidental messages here. We might 
+                # receive these -while- waiting for the response to the 
+                # command we sent.
+
                 if frame_type == FRAME_TYPE_MESSAGE:
                     self.__log("Received message.")
 
-# TODO(dustin): Use greenlets.
-                    message = NsqMessage(self, data)
+                    message = decode_message(data[:26])
                     if one_response is False:
                         process_message(message)
                     else:
@@ -238,10 +242,11 @@ class SyncConn(object):
     
                     continue
 
+# TODO(dustin): What's the frame-type of a heartbeat?
                 if data == '_heartbeat_':
                     self.__log("Responding to heartbeat.")
 
-                    self.send_nop()
+                    self.__send_command('NOP')
                     continue
 
             i += 1
@@ -254,46 +259,47 @@ class SyncConn(object):
             process_messages()
 
         if data is None:
-            self.__log("No response received (%s)." % (reason))
+            self.__log("No response received.")
         else:
-            self.__log("Response received (%s)." % (reason))
+            self.__log("Response received.")
 
         return data
 
-    def send_nop(self):
-        self.__send_command('NOP')
-
-    def send_rdy(self, count):
-# TODO(dustin): Track state. This can only happen after a SUB, when we're in 
-#               RDY-0.
-        self.__send_command('RDY', parameters=(count,))
-
-    def send_pub(self, topic, data):
-        self.__send_command('PUB', parameters=(topic,), data=data)
-
-    def send_mpub(self, topic, messages):
-        count_encoded = struct.pack('>l', len(messages))
-
-        phrases = [(struct.pack('>l', len(message)) + message) 
-                   for message 
-                   in messages]
-
-        phrase_bytes = ''.join(phrases)
-
-        self.__send_command('MPUB', parameters=(topic,), 
-                            data=(count_encoded + phrase_bytes))
-
-    def send_sub(self, topic, channel):
-        self.__send_command('SUB', parameters=(topic, channel))
-
-    def send_fin(self, message_id):
+#    def send_nop(self):
+#        self.__send_command('NOP')
+#
+#    def send_rdy(self, count):
+## TODO(dustin): Track state. This can only happen after a SUB, when we're in 
+##               RDY-0.
+#        self.__send_command('RDY', parameters=(count,))
+#
+#    def send_pub(self, topic, data):
+#        self.__send_command('PUB', parameters=(topic,), data=data)
+#
+#    def send_mpub(self, topic, messages):
+#        count_encoded = struct.pack('>l', len(messages))
+#
+#        phrases = [(struct.pack('>l', len(message)) + message) 
+#                   for message 
+#                   in messages]
+#
+#        phrase_bytes = ''.join(phrases)
+#
+#        self.__send_command('MPUB', parameters=(topic,), 
+#                            data=(count_encoded + phrase_bytes))
+#
+#    def send_sub(self, topic, channel):
+#        self.__send_command('SUB', parameters=(topic, channel))
+#
+    def __send_fin(self, message_id):
         self.__send_command('FIN', parameters=(message_id,))
+#
+#    def send_req(self, message_id, timeout_ms):
+#        self.__send_command('REQ', parameters=(message_id, timeout_ms))
+#
+#    def send_touch(self, message_id):
+#        self.__send_command('TOUCH', parameters=(message_id))
+#
+#    def send_cls(self):
+#        self.__send_command('CLS')
 
-    def send_req(self, message_id, timeout_ms):
-        self.__send_command('REQ', parameters=(message_id, timeout_ms))
-
-    def send_touch(self, message_id):
-        self.__send_command('TOUCH', parameters=(message_id))
-
-    def send_cls(self):
-        self.__send_command('CLS')
