@@ -1,5 +1,8 @@
 #!/usr/bin/env python2.7
 
+import sys
+sys.path.insert(0, '..')
+
 from nsq import subscribe, ready
 from nsq.sync import SyncConn
 
