@@ -5,8 +5,8 @@ sys.path.insert(0, '..')
 
 from time import time
 
-from nsq import pub
-from nsq.sync import SyncConn
+import pub
+from sync import SyncConn
 
 print("Opening connection.")
 sync = SyncConn()
