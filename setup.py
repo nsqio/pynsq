@@ -15,8 +15,8 @@ class PyTest(TestCommand):
         sys.exit(errno)
 
 
-# also update in nsq/__init__.py
-version = '0.6.0-alpha'
+# also update in nsq/version.py
+version = '0.6.0'
 
 
 setup(

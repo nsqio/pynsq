@@ -12,7 +12,8 @@ from async import AsyncConn
 from reader import Reader
 from legacy_reader import LegacyReader
 from writer import Writer
-from version import __version__
+from version import __version__  # NOQA
+
 
 def _handle_term_signal(sig_num, frame):
     logging.info('TERM Signal handler called with signal %r' % sig_num)
@@ -27,7 +28,6 @@ def run():
     tornado.ioloop.IOLoop.instance().start()
 
 
-# also update in setup.py
 __author__ = "Matt Reiferson <snakes@gmail.com>"
 __all__ = ["Reader", "Writer", "run", "BackoffTimer", "Message", "Error", "LegacyReader",
            "SyncConn", "AsyncConn", "unpack_response", "decode_message",
