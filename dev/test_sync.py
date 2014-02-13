@@ -16,5 +16,9 @@ data = ('test data: %d' % (time()))
 sync.send(pub('test_topic', data))
 
 print("Waiting for response.")
-sync.run_loop(one_response=True)
+data = sync.run_loop(one_response=True)
+if data is None:
+    raise ValueError("We expected a response and didn't get one.")
+
+print("Response: %s" % (data))
 

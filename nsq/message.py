@@ -56,6 +56,10 @@ class Message(EventedMixin):
 
         super(Message, self).__init__()
 
+    def __str__(self):
+        return ('<MSG ID=[%s] TIME=[%s] ATT=[%s] LEN=(%d)>' % 
+                (self.id, self.timestamp, self.attempts, len(self.body)))
+
     def enable_async(self):
         """
         Enables asynchronous processing for this message.

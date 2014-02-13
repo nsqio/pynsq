@@ -13,7 +13,7 @@ print("Subscribing.")
 sync.send(subscribe('test_topic', 'test_channel'))
 
 print("Sending ready.")
-sync.send(ready(1))
+sync.send(ready(10))
 
 print("Waiting for response.")
 sync.run_loop(one_response=True)
