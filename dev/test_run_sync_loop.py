@@ -3,8 +3,8 @@
 import sys
 sys.path.insert(0, '..')
 
-import subscribe, ready
-from sync import SyncConn
+from nsq import subscribe, ready
+from nsq.sync import SyncConn
 
 print("Opening connection.")
 sync = SyncConn()
