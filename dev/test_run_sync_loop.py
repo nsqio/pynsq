@@ -3,7 +3,7 @@
 import sys
 sys.path.insert(0, '..')
 
-from nsq import subscribe, ready
+from nsq.nsq import subscribe, ready
 from nsq.sync import SyncConn
 
 print("Opening connection.")
