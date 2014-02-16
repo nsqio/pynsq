@@ -6,7 +6,6 @@ import struct
 from mock import patch, create_autospec, MagicMock
 from tornado.iostream import IOStream
 
-
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 if base_dir not in sys.path:
