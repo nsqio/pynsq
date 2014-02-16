@@ -117,7 +117,7 @@ class AsyncConn(EventedMixin):
         self.snappy = snappy
         self.hostname = socket.gethostname()
         self.short_hostname = self.hostname.split('.')[0]
-        self.heartbeat_interval = heartbeat_interval
+        self.heartbeat_interval = heartbeat_interval * 1000
         self.requeue_delay = requeue_delay
 
         self.output_buffer_size = output_buffer_size
