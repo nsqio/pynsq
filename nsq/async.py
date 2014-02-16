@@ -81,9 +81,8 @@ class AsyncConn(EventedMixin):
         Sample rate can be greater than 0 or less than 100 and the client will receive that
         percentage of the message traffic. (requires nsqd 0.2.25+)
 
-     :param user_agent: a string identifying the agent for this client in the spirit of
-        HTTP (default: "<client_library_name>/<version>") (requires nsqd 0.2.25+)
-
+    :param user_agent: a string identifying the agent for this client in the spirit of
+        HTTP (default: ``<client_library_name>/<version>``) (requires nsqd 0.2.25+)
     """
     def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
                  tls_v1=False, tls_options=None, snappy=False, user_agent=None,

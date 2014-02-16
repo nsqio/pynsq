@@ -74,7 +74,7 @@ class Writer(Client):
     :param nsqd_tcp_addresses: a sequence with elements of the form 'address:port' corresponding
         to the ``nsqd`` instances this writer should publish to
 
-    :param **kwargs: passed to :class:`nsq.AsyncConn` initialization
+    :param \*\*kwargs: passed to :class:`nsq.AsyncConn` initialization
     """
     def __init__(self, nsqd_tcp_addresses, **kwargs):
         if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):

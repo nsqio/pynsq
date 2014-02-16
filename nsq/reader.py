@@ -117,7 +117,7 @@ class Reader(Client):
 
     :param max_backoff_duration: the maximum time we will allow a backoff state to last in seconds
 
-    :param **kwargs: passed to :class:`nsq.AsyncConn` initialization
+    :param \*\*kwargs: passed to :class:`nsq.AsyncConn` initialization
     """
     def __init__(self, topic, channel, message_handler=None, name=None,
                  nsqd_tcp_addresses=None, lookupd_http_addresses=None,
