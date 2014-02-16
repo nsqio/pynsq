@@ -3,14 +3,15 @@ python:
   - "2.6"
   - "2.7"
 env:
-  - TORNADO_VERSION=1.2.1
   - TORNADO_VERSION=2.4.1
   - TORNADO_VERSION=3.0.2
+  - TORNADO_VERSION=3.1.1
+  - TORNADO_VERSION=3.2
 install:
-  - "pip install simplejson --use-mirrors"
+  - "pip install simplejson"
   - "export PYCURL_SSL_LIBRARY=openssl"
-  - "pip install pycurl --use-mirrors"
-  - "pip install tornado==$TORNADO_VERSION --use-mirrors"
+  - "pip install pycurl"
+  - "pip install tornado==$TORNADO_VERSION"
 script: py.test
 notifications:
   email: false
