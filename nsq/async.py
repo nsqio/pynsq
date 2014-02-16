@@ -176,7 +176,8 @@ class AsyncConn(EventedMixin):
             self.stream.read_bytes(size, self._read_body)
         except Exception:
             self.close()
-            self.trigger('error', nsq.IntegrityError('failed to unpack size'))
+            self.trigger('error', conn=self,
+                         error=nsq.IntegrityError('failed to unpack size'))
 
     def _read_body(self, data):
         try:
