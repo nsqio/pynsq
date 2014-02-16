@@ -4,8 +4,6 @@ import time
 import functools
 import random
 
-import tornado.ioloop
-
 from client import Client
 import nsq
 import async
@@ -77,6 +75,8 @@ class Writer(Client):
     :param \*\*kwargs: passed to :class:`nsq.AsyncConn` initialization
     """
     def __init__(self, nsqd_tcp_addresses, **kwargs):
+        super(Writer, self).__init__(**kwargs)
+
         if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
             assert isinstance(nsqd_tcp_addresses, (str, unicode))
             nsqd_tcp_addresses = [nsqd_tcp_addresses]
@@ -86,7 +86,7 @@ class Writer(Client):
         self.conns = {}
         self.conn_kwargs = kwargs
 
-        self.ioloop.add_callback(self._run)
+        self.io_loop.add_callback(self._run)
 
     def _run(self):
         logging.info('starting writer...')
@@ -173,7 +173,7 @@ class Writer(Client):
         logging.info('[%s] attempting to reconnect in 15s', conn.id)
         reconnect_callback = functools.partial(self.connect_to_nsqd,
                                                host=conn.host, port=conn.port)
-        tornado.ioloop.IOLoop.instance().add_timeout(time.time() + 15, reconnect_callback)
+        self.io_loop.add_timeout(time.time() + 15, reconnect_callback)
 
     def _finish_pub(self, conn, data, command, topic, msg):
         if isinstance(data, nsq.Error):

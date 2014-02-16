@@ -86,7 +86,8 @@ class AsyncConn(EventedMixin):
     """
     def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
                  tls_v1=False, tls_options=None, snappy=False, user_agent=None,
-                 output_buffer_size=16 * 1024, output_buffer_timeout=250, sample_rate=0):
+                 output_buffer_size=16 * 1024, output_buffer_timeout=250, sample_rate=0,
+                 io_loop=None):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -118,6 +119,9 @@ class AsyncConn(EventedMixin):
         self.short_hostname = self.hostname.split('.')[0]
         self.heartbeat_interval = heartbeat_interval * 1000
         self.requeue_delay = requeue_delay
+        self.io_loop = io_loop
+        if not self.io_loop:
+            self.io_loop = tornado.ioloop.IOLoop.instance()
 
         self.output_buffer_size = output_buffer_size
         self.output_buffer_timeout = output_buffer_timeout
@@ -144,7 +148,7 @@ class AsyncConn(EventedMixin):
         self.socket.settimeout(self.timeout)
         self.socket.setblocking(0)
 
-        self.stream = tornado.iostream.IOStream(self.socket)
+        self.stream = tornado.iostream.IOStream(self.socket, io_loop=self.io_loop)
         self.stream.set_close_callback(self._socket_close)
 
         self.state = 'CONNECTING'
@@ -183,7 +187,7 @@ class AsyncConn(EventedMixin):
             self.trigger('data', conn=self, data=data)
         except Exception:
             logging.exception('uncaught exception in data event')
-        tornado.ioloop.IOLoop.instance().add_callback(self._start_read)
+        self.io_loop.add_callback(self._start_read)
 
     def send(self, data):
         self.stream.write(data)
@@ -196,7 +200,7 @@ class AsyncConn(EventedMixin):
         # first remove the event handler for the currently open socket
         # so that when we add the socket to the new SSLIOStream below,
         # it can re-add the appropriate event handlers.
-        tornado.ioloop.IOLoop.instance().remove_handler(self.socket.fileno())
+        self.io_loop.remove_handler(self.socket.fileno())
 
         opts = {
             'cert_reqs': ssl.CERT_REQUIRED,
@@ -206,7 +210,7 @@ class AsyncConn(EventedMixin):
         self.socket = ssl.wrap_socket(self.socket, ssl_version=ssl.PROTOCOL_TLSv1,
                                       do_handshake_on_connect=False, **opts)
 
-        self.stream = tornado.iostream.SSLIOStream(self.socket)
+        self.stream = tornado.iostream.SSLIOStream(self.socket, io_loop=self.io_loop)
         self.stream.set_close_callback(self._socket_close)
 
         # now that the IOStream has been swapped we can kickstart
