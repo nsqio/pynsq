@@ -124,6 +124,8 @@ class Reader(Client):
                  max_tries=5, max_in_flight=1, lookupd_poll_interval=60,
                  low_rdy_idle_timeout=10, max_backoff_duration=128, lookupd_poll_jitter=0.3,
                  **kwargs):
+        super(Reader, self).__init__(**kwargs)
+
         assert isinstance(topic, (str, unicode)) and len(topic) > 0
         assert isinstance(channel, (str, unicode)) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
@@ -175,12 +177,10 @@ class Reader(Client):
 
         self.conns = {}
         self.connection_attempts = {}
-        self.http_client = tornado.httpclient.AsyncHTTPClient()
-
-        self.ioloop = tornado.ioloop.IOLoop.instance()
+        self.http_client = tornado.httpclient.AsyncHTTPClient(io_loop=self.io_loop)
 
         # will execute when run() is called (for all Reader instances)
-        self.ioloop.add_callback(self._run)
+        self.io_loop.add_callback(self._run)
 
     def _run(self):
         assert self.message_handler, "you must specify the Reader's message_handler"
@@ -191,7 +191,9 @@ class Reader(Client):
             address, port = addr.split(':')
             self.connect_to_nsqd(address, int(port))
 
-        tornado.ioloop.PeriodicCallback(self._redistribute_rdy_state, 5 * 1000).start()
+        tornado.ioloop.PeriodicCallback(self._redistribute_rdy_state,
+                                        5 * 1000,
+                                        io_loop=self.io_loop).start()
 
         if not self.lookupd_http_addresses:
             return
@@ -199,11 +201,13 @@ class Reader(Client):
         self.query_lookupd()
 
         periodic = tornado.ioloop.PeriodicCallback(self.query_lookupd,
-                                                   self.lookupd_poll_interval * 1000)
+                                                   self.lookupd_poll_interval * 1000,
+                                                   io_loop=self.io_loop)
+
         # randomize the time we start this poll loop so that all
         # consumers don't query at exactly the same time
         delay = random.random() * self.lookupd_poll_interval * self.lookupd_poll_jitter
-        self.ioloop.add_timeout(time.time() + delay, periodic.start)
+        self.io_loop.add_timeout(time.time() + delay, periodic.start)
 
     def set_message_handler(self, message_handler):
         """
@@ -352,8 +356,8 @@ class Reader(Client):
         for c in self.conns.values():
             self._send_rdy(c, 0)
 
-        self.backoff_timeout = self.ioloop.add_timeout(time.time() + backoff_interval,
-                                                       self._finish_backoff_block)
+        self.backoff_timeout = self.io_loop.add_timeout(time.time() + backoff_interval,
+                                                        self._finish_backoff_block)
 
     def _rdy_retry(self, conn, value):
         conn.rdy_timeout = None
@@ -361,13 +365,13 @@ class Reader(Client):
 
     def _send_rdy(self, conn, value):
         if conn.rdy_timeout:
-            self.ioloop.remove_timeout(conn.rdy_timeout)
+            self.io_loop.remove_timeout(conn.rdy_timeout)
             conn.rdy_timeout = None
 
         if value and self.disabled():
             logging.info('[%s:%s] disabled, delaying RDY state change', conn.id, self.name)
             rdy_retry_callback = functools.partial(self._rdy_retry, conn, value)
-            conn.rdy_timeout = self.ioloop.add_timeout(time.time() + 15, rdy_retry_callback)
+            conn.rdy_timeout = self.io_loop.add_timeout(time.time() + 15, rdy_retry_callback)
             return
 
         if value > conn.max_rdy_count:
@@ -378,7 +382,7 @@ class Reader(Client):
                 # if we're going from RDY 0 to non-0 and we couldn't because
                 # of the configured max in flight, try again
                 rdy_retry_callback = functools.partial(self._rdy_retry, conn, value)
-                conn.rdy_timeout = self.ioloop.add_timeout(time.time() + 5, rdy_retry_callback)
+                conn.rdy_timeout = self.io_loop.add_timeout(time.time() + 5, rdy_retry_callback)
             return
 
         if conn.send_rdy(value):
@@ -467,7 +471,7 @@ class Reader(Client):
             self.need_rdy_redistributed = True
 
         if conn.rdy_timeout:
-            self.ioloop.remove_timeout(conn.rdy_timeout)
+            self.io_loop.remove_timeout(conn.rdy_timeout)
             conn.rdy_timeout = None
 
         if not self.lookupd_http_addresses:
@@ -475,7 +479,7 @@ class Reader(Client):
             logging.info('[%s:%s] attempting to reconnect in 15s', conn.id, self.name)
             reconnect_callback = functools.partial(self.connect_to_nsqd,
                                                    host=conn.host, port=conn.port)
-            self.ioloop.add_timeout(time.time() + 15, reconnect_callback)
+            self.io_loop.add_timeout(time.time() + 15, reconnect_callback)
 
     def query_lookupd(self):
         """

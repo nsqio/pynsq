@@ -3,9 +3,8 @@ import os
 import sys
 
 import struct
-from mock import patch, create_autospec
+from mock import patch, create_autospec, MagicMock
 from tornado.iostream import IOStream
-
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -20,8 +19,8 @@ def f(*args, **kwargs):
     pass
 
 
-def _get_test_conn():
-    conn = nsq.async.AsyncConn('test', 4150)
+def _get_test_conn(io_loop=None):
+    conn = nsq.async.AsyncConn('test', 4150, io_loop=io_loop)
     # now set the stream attribute, which is ordinarily set in conn.connect()
     conn.stream = create_autospec(IOStream)
     return conn
@@ -87,23 +86,23 @@ def test_read_size():
 
 
 def test_read_body():
-    conn = _get_test_conn()
+    mock_io_loop = MagicMock()
+
+    conn = _get_test_conn(io_loop=mock_io_loop)
     on_data = create_autospec(f)
     conn.on('data', on_data)
-    # I won't autospec the mock below, it doesn't seem to want to behave.
-    # I only assert against one of its attrs anyway, which I will spec
-    with patch('nsq.async.tornado.ioloop.IOLoop.instance') as mock_io_loop:
-        mock_ioloop_addcb = create_autospec(f)
-        mock_io_loop.return_value.add_callback = mock_ioloop_addcb
-        data = 'NSQ'
-        conn._read_body(data)
-        on_data.assert_called_once_with(conn=conn, data=data)
-        mock_ioloop_addcb.assert_called_once_with(conn._start_read)
 
-        # now test functionality when the data_callback fails
-        on_data.reset_mock()
-        mock_ioloop_addcb.reset_mock()
-        on_data.return_value = Exception("Boom.")
-        conn._read_body(data)
-        # verify that we still added callback for the next start_read
-        mock_ioloop_addcb.assert_called_once_with(conn._start_read)
+    mock_ioloop_addcb = create_autospec(f)
+    mock_io_loop.add_callback = mock_ioloop_addcb
+    data = 'NSQ'
+    conn._read_body(data)
+    on_data.assert_called_once_with(conn=conn, data=data)
+    mock_ioloop_addcb.assert_called_once_with(conn._start_read)
+
+    # now test functionality when the data_callback fails
+    on_data.reset_mock()
+    mock_ioloop_addcb.reset_mock()
+    on_data.return_value = Exception("Boom.")
+    conn._read_body(data)
+    # verify that we still added callback for the next start_read
+    mock_ioloop_addcb.assert_called_once_with(conn._start_read)

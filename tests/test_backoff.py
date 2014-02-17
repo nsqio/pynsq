@@ -4,7 +4,8 @@ import sys
 import random
 import time
 
-from mock import Mock, patch
+from mock import patch, create_autospec
+from tornado.ioloop import IOLoop
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -21,11 +22,12 @@ def _message_handler(msg):
     msg.enable_async()
 
 
-def _get_reader():
+def _get_reader(io_loop=None):
     return nsq.Reader("test", "test",
                       message_handler=_message_handler,
                       lookupd_http_addresses=["http://test.local:4161"],
-                      max_in_flight=5)
+                      max_in_flight=5,
+                      io_loop=io_loop)
 
 
 def _get_conn(reader):
@@ -50,12 +52,9 @@ def _get_message(conn):
     return msg
 
 
-@patch('nsq.async.tornado.ioloop.IOLoop', autospec=True)
-def test_backoff_easy(mock_ioloop):
-    instance = Mock()
-    mock_ioloop.instance.return_value = instance
-
-    r = _get_reader()
+def test_backoff_easy():
+    mock_ioloop = create_autospec(IOLoop)
+    r = _get_reader(mock_ioloop)
     conn = _get_conn(r)
 
     msg = _send_message(conn)
@@ -69,9 +68,9 @@ def test_backoff_easy(mock_ioloop):
     msg.trigger('requeue', message=msg)
     assert r.backoff_block is True
     assert r.backoff_timer.get_interval() > 0
-    assert instance.add_timeout.called
+    assert mock_ioloop.add_timeout.called
 
-    timeout_args, timeout_kwargs = instance.add_timeout.call_args
+    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
     timeout_args[1]()
     assert r.backoff_block is False
     send_args, send_kwargs = conn.stream.write.call_args
@@ -93,15 +92,12 @@ def test_backoff_easy(mock_ioloop):
     assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
 
 
-@patch('nsq.async.tornado.ioloop.IOLoop', autospec=True)
-def test_backoff_hard(mock_ioloop):
-    expected_args = ['SUB test test\n', 'RDY 1\n', 'RDY 5\n']
-
-    instance = Mock()
-    mock_ioloop.instance.return_value = instance
-
-    r = _get_reader()
+def test_backoff_hard():
+    mock_ioloop = create_autospec(IOLoop)
+    r = _get_reader(io_loop=mock_ioloop)
     conn = _get_conn(r)
+
+    expected_args = ['SUB test test\n', 'RDY 1\n', 'RDY 5\n']
 
     num_fails = 0
     fail = True
@@ -124,9 +120,9 @@ def test_backoff_hard(mock_ioloop):
 
         assert r.backoff_block is True
         assert r.backoff_timer.get_interval() > 0
-        assert instance.add_timeout.called
+        assert mock_ioloop.add_timeout.called
 
-        timeout_args, timeout_kwargs = instance.add_timeout.call_args
+        timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
             timeout_args[1]()
             last_timeout_time = timeout_args[0]
@@ -142,7 +138,7 @@ def test_backoff_hard(mock_ioloop):
 
         msg.trigger('finish', message=msg)
         expected_args.append('FIN 1234\n')
-        timeout_args, timeout_kwargs = instance.add_timeout.call_args
+        timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
             timeout_args[1]()
             last_timeout_time = timeout_args[0]
@@ -163,15 +159,11 @@ def test_backoff_hard(mock_ioloop):
     assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
 
 
-@patch('nsq.async.tornado.ioloop.IOLoop', autospec=True)
-def test_backoff_many_conns(mock_ioloop):
+def test_backoff_many_conns():
+    mock_ioloop = create_autospec(IOLoop)
+    r = _get_reader(io_loop=mock_ioloop)
+
     num_conns = 5
-
-    instance = Mock()
-    mock_ioloop.instance.return_value = instance
-
-    r = _get_reader()
-
     conns = []
     for i in range(num_conns):
         conn = _get_conn(r)
@@ -208,9 +200,9 @@ def test_backoff_many_conns(mock_ioloop):
 
         assert r.backoff_block is True
         assert r.backoff_timer.get_interval() > 0
-        assert instance.add_timeout.called
+        assert mock_ioloop.add_timeout.called
 
-        timeout_args, timeout_kwargs = instance.add_timeout.call_args
+        timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
             conn = timeout_args[1]()
             last_timeout_time = timeout_args[0]
@@ -242,7 +234,7 @@ def test_backoff_many_conns(mock_ioloop):
 
         conn.expected_args.append('FIN 1234\n')
 
-        timeout_args, timeout_kwargs = instance.add_timeout.call_args
+        timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
             conn = timeout_args[1]()
             last_timeout_time = timeout_args[0]
@@ -264,15 +256,11 @@ def test_backoff_many_conns(mock_ioloop):
         assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
 
 
-@patch('nsq.async.tornado.ioloop.IOLoop', autospec=True)
-def test_backoff_conns_disconnect(mock_ioloop):
+def test_backoff_conns_disconnect():
+    mock_ioloop = create_autospec(IOLoop)
+    r = _get_reader(io_loop=mock_ioloop)
+
     num_conns = 5
-
-    instance = Mock()
-    mock_ioloop.instance.return_value = instance
-
-    r = _get_reader()
-
     conns = []
     for i in range(num_conns):
         conn = _get_conn(r)
@@ -327,9 +315,9 @@ def test_backoff_conns_disconnect(mock_ioloop):
 
         assert r.backoff_block is True
         assert r.backoff_timer.get_interval() > 0
-        assert instance.add_timeout.called
+        assert mock_ioloop.add_timeout.called
 
-        timeout_args, timeout_kwargs = instance.add_timeout.call_args
+        timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
             conn = timeout_args[1]()
             last_timeout_time = timeout_args[0]
@@ -350,7 +338,7 @@ def test_backoff_conns_disconnect(mock_ioloop):
 
         conn.expected_args.append('FIN 1234\n')
 
-        timeout_args, timeout_kwargs = instance.add_timeout.call_args
+        timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
             conn = timeout_args[1]()
             last_timeout_time = timeout_args[0]

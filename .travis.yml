@@ -8,10 +8,15 @@ env:
   - TORNADO_VERSION=3.1.1
   - TORNADO_VERSION=3.2
 install:
-  - "pip install simplejson"
-  - "export PYCURL_SSL_LIBRARY=openssl"
-  - "pip install pycurl"
-  - "pip install tornado==$TORNADO_VERSION"
+  - pip install simplejson
+  - export PYCURL_SSL_LIBRARY=openssl
+  - pip install pycurl
+  - pip install tornado==$TORNADO_VERSION
+  - sudo apt-get install libsnappy-dev
+  - pip install python-snappy
+  - wget https://github.com/bitly/nsq/releases/download/v0.2.26/nsq-0.2.26.linux-amd64.go1.2.tar.gz
+  - tar zxvf nsq-0.2.26.linux-amd64.go1.2.tar.gz
+  - sudo cp nsq-0.2.26.linux-amd64.go1.2/bin/nsqd nsq-0.2.26.linux-amd64.go1.2/bin/nsqlookupd /usr/local/bin
 script: py.test
 notifications:
   email: false
