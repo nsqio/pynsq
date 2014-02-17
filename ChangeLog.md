@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 - 2014-02-17
+
+IMPORTANT: this is a bug-fix release to address an issue preventing `Reader` from
+consuming messages.
+
+ * #63 - fix connection attributes bug; `heartbeat_interval` as ms
+ * #65 - fix invalid arguments during read error
+ * #66/#64 - add integration tests; improve testing matrix
+
 ## 0.6.0 - 2014-02-13
 
 This release includes an array of new features, refactoring, and bug fixes.
