@@ -34,7 +34,7 @@ class Client(object):
 
         def is_stale(conn):
             timestamp = conn.last_recv_timestamp
-            return (now - timestamp) > ((self.heartbeat_interval * 2) / 1000.0)
+            return (now - timestamp) > ((conn.heartbeat_interval * 2) / 1000.0)
 
         # first get the list of stale connections, then close
         # (`conn.close()` may modify the list of connections while we're iterating)
