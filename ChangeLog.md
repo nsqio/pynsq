@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.2 - 2014-02-21
+
+IMPORTANT: this is a bug-fix release to address an issue where `Reader` would raise
+and exception when receiving a heartbeat.
+
+ * #68 - fix heartbeat_interval bug
+
 ## 0.6.1 - 2014-02-17
 
 IMPORTANT: this is a bug-fix release to address an issue preventing `Reader` from
