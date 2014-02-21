@@ -405,7 +405,7 @@ class Reader(Client):
         conn.on('close', self._on_connection_close)
         conn.on('ready', self._on_connection_ready)
         conn.on('message', self._on_message)
-        conn.on('heartbeat', self.heartbeat)
+        conn.on('heartbeat', self._on_heartbeat)
         conn.on('backoff', functools.partial(self._on_backoff_resume, success=False))
         conn.on('resume', functools.partial(self._on_backoff_resume, success=True))
 
@@ -612,17 +612,6 @@ class Reader(Client):
         to identify if this reader should pause execution (during a deploy, etc.).
         """
         return False
-
-    def heartbeat(self, conn):
-        """
-        Called whenever a heartbeat has been received
-
-        This is useful to subclass and override to perform an action based on liveness (for
-        monitoring, etc.)
-
-        :param conn: the :class:`nsq.AsyncConn` over which the heartbeat was received
-        """
-        logging.info('[%s:%s] received heartbeat' % (conn.id, self.name))
 
     def validate_message(self, message):
         return True

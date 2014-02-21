@@ -46,3 +46,18 @@ class Client(object):
             logging.warning('[%s:%s] connection is stale (%.02fs), closing',
                             conn.id, self.name, (now - timestamp))
             conn.close()
+
+    def _on_heartbeat(self, conn):
+        logging.info('[%s:%s] received heartbeat' % (conn.id, self.name))
+        self.heartbeat(conn)
+
+    def heartbeat(self, conn):
+        """
+        Called whenever a heartbeat has been received
+
+        This is useful to subclass and override to perform an action based on liveness (for
+        monitoring, etc.)
+
+        :param conn: the :class:`nsq.AsyncConn` over which the heartbeat was received
+        """
+        pass
