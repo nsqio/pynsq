@@ -5,6 +5,7 @@ import subprocess
 import time
 import ssl
 
+import tornado.httpclient
 import tornado.testing
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
@@ -33,7 +34,19 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                                  '--tls-key=%s/tests/key.pem' % base_dir,
                                  '--tls-cert=%s/tests/cert.pem' % base_dir])
         self.processes.append(proc)
-        time.sleep(1)
+        http = tornado.httpclient.HTTPClient()
+        start = time.time()
+        while True:
+            try:
+                resp = http.fetch('http://127.0.0.1:4151/ping')
+                if resp.body == 'OK':
+                    break
+                continue
+            except:
+                if time.time() - start > 5:
+                    raise
+                time.sleep(0.1)
+                continue
 
     def tearDown(self):
         super(ReaderIntegrationTest, self).tearDown()
@@ -61,9 +74,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         assert isinstance(response['data'], dict)
         assert response['data']['snappy'] is True
         assert response['data']['tls_v1'] is True
-        # assert response['data']['user_agent'] == 'sup'
-        # assert response['data']['output_buffer_size'] == 4096
-        # assert response['data']['output_buffer_timeout'] == 50
 
     def test_conn_subscribe(self):
         topic = 'test_conn_suscribe_%s' % time.time()
@@ -134,4 +144,23 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                    io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
                    **self.identify_options)
 
+        self.wait()
+
+    def test_reader_heartbeat(self):
+        this = self
+        this.count = 0
+
+        def handler(msg):
+            return True
+
+        class HeartbeatReader(nsq.Reader):
+            def heartbeat(self, conn):
+                this.count += 1
+                if this.count == 2:
+                    this.stop()
+
+        topic = 'test_reader_hb_%s' % time.time()
+        HeartbeatReader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                        io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+                        heartbeat_interval=1)
         self.wait()

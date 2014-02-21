@@ -72,9 +72,11 @@ class Writer(Client):
     :param nsqd_tcp_addresses: a sequence with elements of the form 'address:port' corresponding
         to the ``nsqd`` instances this writer should publish to
 
+    :param name: a string that is used for logging messages (defaults to first nsqd address)
+
     :param \*\*kwargs: passed to :class:`nsq.AsyncConn` initialization
     """
-    def __init__(self, nsqd_tcp_addresses, **kwargs):
+    def __init__(self, nsqd_tcp_addresses, name=None, **kwargs):
         super(Writer, self).__init__(**kwargs)
 
         if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
@@ -82,6 +84,7 @@ class Writer(Client):
             nsqd_tcp_addresses = [nsqd_tcp_addresses]
         assert nsqd_tcp_addresses
 
+        self.name = name or nsqd_tcp_addresses[0]
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
         self.conns = {}
         self.conn_kwargs = kwargs
@@ -179,10 +182,3 @@ class Writer(Client):
         if isinstance(data, nsq.Error):
             logging.error('[%s] failed to %s (%s, %s), data is %s',
                           conn.id, command, topic, msg, data)
-
-    #
-    # subclass overwriteable
-    #
-
-    def heartbeat(self, conn):
-        logging.info('[%s] received heartbeat', conn.id)

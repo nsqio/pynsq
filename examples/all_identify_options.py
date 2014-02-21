@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import nsq
 import ssl
 import tornado.options
