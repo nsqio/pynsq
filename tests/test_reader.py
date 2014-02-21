@@ -145,3 +145,22 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                    **self.identify_options)
 
         self.wait()
+
+    def test_reader_heartbeat(self):
+        this = self
+        this.count = 0
+
+        def handler(msg):
+            return True
+
+        class HeartbeatReader(nsq.Reader):
+            def heartbeat(self, conn):
+                this.count += 1
+                if this.count == 2:
+                    this.stop()
+
+        topic = 'test_reader_hb_%s' % time.time()
+        HeartbeatReader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                        io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+                        heartbeat_interval=1)
+        self.wait()
