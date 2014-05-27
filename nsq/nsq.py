@@ -72,6 +72,8 @@ def subscribe(topic, channel):
 def identify(data):
     return _command('IDENTIFY', json.dumps(data))
 
+def auth(data):
+    return _command('AUTH', data)
 
 def ready(count):
     assert isinstance(count, int), 'ready count must be an integer'

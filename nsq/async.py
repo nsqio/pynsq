@@ -42,6 +42,8 @@ class AsyncConn(EventedMixin):
      * ``error``
      * ``identify``
      * ``identify_response``
+     * ``auth``
+     * ``auth_response``
      * ``heartbeat``
      * ``ready``
      * ``message``
@@ -83,11 +85,15 @@ class AsyncConn(EventedMixin):
 
     :param user_agent: a string identifying the agent for this client in the spirit of
         HTTP (default: ``<client_library_name>/<version>``) (requires nsqd 0.2.25+)
+    
+    :param authentication_secret: a string passed to nsqauthd when usting nsqd authentication 
+        (requires nsqd 1.0+)
     """
     def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
                  tls_v1=False, tls_options=None, snappy=False, user_agent=None,
                  output_buffer_size=16 * 1024, output_buffer_timeout=250, sample_rate=0,
-                 io_loop=None):
+                 io_loop=None,
+                 authentication_secret=None):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -97,6 +103,7 @@ class AsyncConn(EventedMixin):
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
+        assert isinstance(authentication_secret, (str, unicode, None.__class__))
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
 
@@ -130,7 +137,9 @@ class AsyncConn(EventedMixin):
 
         if self.user_agent is None:
             self.user_agent = 'pynsq/%s' % __version__
-
+        
+        self._authentication_required = False # tracking server auth state
+        self.authentication_secret = authentication_secret
         super(AsyncConn, self).__init__()
 
     @property
@@ -270,6 +279,7 @@ class AsyncConn(EventedMixin):
         self.off('response', self._on_identify_response)
 
         if data == 'OK':
+            logging.warning('nsqd version does not support feature netgotiation')
             return self.trigger('ready', conn=self)
 
         try:
@@ -287,6 +297,9 @@ class AsyncConn(EventedMixin):
             self._features_to_enable.append('tls_v1')
         if self.snappy and data.get('snappy'):
             self._features_to_enable.append('snappy')
+        
+        if data.get('auth_required'):
+            self._authentication_required = True
 
         self.on('response', self._on_response_continue)
         self._on_response_continue(conn=self, data=None)
@@ -298,11 +311,34 @@ class AsyncConn(EventedMixin):
                 self.upgrade_to_tls(self.tls_options)
             elif feature == 'snappy':
                 self.upgrade_to_snappy()
+            # the server will 'OK' after these conneciton upgrades triggering another response
             return
 
         self.off('response', self._on_response_continue)
+        if self.authentication_secret and self._authentication_required:
+            self.on('response', self._on_auth_response)
+            self.trigger('auth', conn=self, data=self.authentication_secret)
+            try:
+                self.send(nsq.auth(self.authentication_secret))
+            except Exception, e:
+                self.close()
+                self.trigger('error', conn=self, error=nsq.SendError('Error sending AUTH', e))
+            return
         self.trigger('ready', conn=self)
+    
+    def _on_auth_response(self, data, **kwargs):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            self.close()
+            err = 'failed to parse AUTH response JSON from nsqd - %r' % data
+            self.trigger('error', conn=self, error=nsq.IntegrityError(err))
+            return
 
+        self.off('response', self._on_auth_response)
+        self.trigger('auth_response', conn=self, data=data)
+        return self.trigger('ready', conn=self)
+    
     def _on_data(self, data, **kwargs):
         self.last_recv_timestamp = time.time()
         frame, data = nsq.unpack_response(data)

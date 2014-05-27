@@ -26,7 +26,22 @@ class Client(object):
             logging.warning('[%s:%s] snappy requested but disabled, could not negotiate feature',
                             conn.id, self.name)
 
+    def _on_connection_auth(self, conn, data, **kwargs):
+        logging.info('[%s:%s] AUTH sent' % (conn.id, self.name))
+
+    def _on_connection_auth_response(self, conn, data, **kwargs):
+        metadata = []
+        if data.get('identity'):
+            metadata.append("Identity: %r" % data['identity'])
+        if data.get('permission_count'):
+            metadata.append("Permissions: %d" % data['permission_count'])
+        if data.get('identity_url'):
+            metadata.append(data['identity_url'])
+        logging.info('[%s:%s] AUTH accepted %s' % (conn.id, self.name, ' '.join(metadata)))
+
     def _on_connection_error(self, conn, error, **kwargs):
+        if kwargs:
+            logging.error('[%s:%s ERROR: %r]', conn.id, self.name, kwargs)
         logging.error('[%s:%s] ERROR: %r', conn.id, self.name, error)
 
     def _check_last_recv_timestamps(self):
