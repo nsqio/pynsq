@@ -16,7 +16,7 @@ def pytest_generate_tests(metafunc):
         for name, good in [
                 ('valid_name', True),
                 ('invalid name with space', False),
-                ('invalid_name_due_to_length_this_is_really_long', False),
+                ('invalid_name_due_to_length_this_is_really_really_really_really_long', False),
                 ('test-with_period.', True),
                 ('test#ephemeral', False),
                 ('test:ephemeral', False),
@@ -27,7 +27,7 @@ def pytest_generate_tests(metafunc):
                 ('test', True),
                 ('test-with_period.', True),
                 ('test#ephemeral', True),
-                ('invalid_name_due_to_length_this_is_really_long', False),
+                ('invalid_name_due_to_length_this_is_really_really_really_really_long', False),
                 ('invalid name with space', False),
                 ]:
             metafunc.addcall(funcargs=dict(name=name, good=good))
