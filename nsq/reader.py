@@ -401,6 +401,8 @@ class Reader(Client):
         conn = async.AsyncConn(host, port, **self.conn_kwargs)
         conn.on('identify', self._on_connection_identify)
         conn.on('identify_response', self._on_connection_identify_response)
+        conn.on('auth', self._on_connection_auth)
+        conn.on('auth_response', self._on_connection_auth_response)
         conn.on('error', self._on_connection_error)
         conn.on('close', self._on_connection_close)
         conn.on('ready', self._on_connection_ready)
