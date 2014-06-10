@@ -314,10 +314,14 @@ class Reader(Client):
             return conn
 
     def _on_backoff_resume(self, success, **kwargs):
+        # do nothing
+        if self.backoff_block:
+            return
+
         start_backoff_interval = self.backoff_timer.get_interval()
         if success:
             self.backoff_timer.success()
-        elif not self.backoff_block:
+        else:
             self.backoff_timer.failure()
         self._enter_continue_or_exit_backoff(start_backoff_interval)
 
@@ -329,10 +333,6 @@ class Reader(Client):
         # reach no backoff in which case we go back to the normal RDY count.
 
         current_backoff_interval = self.backoff_timer.get_interval()
-
-        # do nothing
-        if self.backoff_block:
-            return
 
         # we're out of backoff completely, return to full blast for all conns
         if start_backoff_interval and not current_backoff_interval:
