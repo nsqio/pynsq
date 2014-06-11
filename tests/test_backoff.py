@@ -22,11 +22,11 @@ def _message_handler(msg):
     msg.enable_async()
 
 
-def _get_reader(io_loop=None):
+def _get_reader(io_loop=None, max_in_flight=5):
     return nsq.Reader("test", "test",
                       message_handler=_message_handler,
                       lookupd_http_addresses=["http://test.local:4161"],
-                      max_in_flight=5,
+                      max_in_flight=max_in_flight,
                       io_loop=io_loop)
 
 
@@ -90,6 +90,51 @@ def test_backoff_easy():
         'FIN 1234\n', 'RDY 5\n'
     ]
     assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+
+
+def test_backoff_out_of_order():
+    mock_ioloop = create_autospec(IOLoop)
+    r = _get_reader(mock_ioloop, max_in_flight=4)
+    conn1 = _get_conn(r)
+    conn2 = _get_conn(r)
+
+    msg = _send_message(conn1)
+
+    msg.trigger('finish', message=msg)
+    assert r.backoff_block is False
+    assert r.backoff_timer.get_interval() == 0
+
+    msg = _send_message(conn1)
+
+    msg.trigger('requeue', message=msg)
+    assert r.backoff_block is True
+    assert r.backoff_timer.get_interval() > 0
+    assert mock_ioloop.add_timeout.called
+    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
+
+    msg = _send_message(conn1)
+
+    msg.trigger('finish', message=msg)
+    assert r.backoff_block is True
+    assert r.backoff_timer.get_interval() == 0
+
+    timeout_args[1]()
+    assert r.backoff_block is False
+    assert r.backoff_timer.get_interval() == 0
+
+    expected_args = [
+        'SUB test test\n',
+        'RDY 1\n', 'RDY 2\n',
+        'FIN 1234\n', 'REQ 1234 0\n',
+        'RDY 0\n', 'FIN 1234\n', 'RDY 2\n'
+    ]
+    assert conn1.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+
+    expected_args = [
+        'SUB test test\n',
+        'RDY 1\n', 'RDY 0\n', 'RDY 2\n'
+    ]
+    assert conn2.stream.write.call_args_list == [((arg,),) for arg in expected_args]
 
 
 def test_backoff_hard():
