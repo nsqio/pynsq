@@ -174,6 +174,7 @@ class Reader(Client):
         self.backoff_timer = BackoffTimer(0, max_backoff_duration)
         self.backoff_timeout = None
         self.backoff_block = False
+        self.backoff_block_completed = True
 
         self.conns = {}
         self.connection_attempts = {}
@@ -303,25 +304,40 @@ class Reader(Client):
         self.backoff_timeout = None
         self.backoff_block = False
 
+        # we must have raced and received a message out of order that resumed
+        # so just complete the backoff block
+        if not self.backoff_timer.get_interval():
+            self._complete_backoff_block()
+            return
+
         # test the waters after finishing a backoff round
         # if we have no connections, this will happen when a new connection gets RDY 1
-        if self.conns:
-            conn = random.choice(self.conns.values())
-            logging.info('[%s:%s] testing backoff state with RDY 1', conn.id, self.name)
-            self._send_rdy(conn, 1)
+        if not self.conns:
+            return
 
-            # for tests
-            return conn
+        conn = random.choice(self.conns.values())
+        logging.info('[%s:%s] testing backoff state with RDY 1', conn.id, self.name)
+        self._send_rdy(conn, 1)
+
+        # for tests
+        return conn
 
     def _on_backoff_resume(self, success, **kwargs):
-        start_backoff_interval = self.backoff_timer.get_interval()
         if success:
             self.backoff_timer.success()
         elif not self.backoff_block:
             self.backoff_timer.failure()
-        self._enter_continue_or_exit_backoff(start_backoff_interval)
+        self._enter_continue_or_exit_backoff()
 
-    def _enter_continue_or_exit_backoff(self, start_backoff_interval):
+    def _complete_backoff_block(self):
+        self.backoff_block_completed = True
+        rdy = self._connection_max_in_flight()
+        logging.info('[%s] backoff complete, resuming normal operation (%d connections)',
+                     self.name, len(self.conns))
+        for c in self.conns.values():
+            self._send_rdy(c, rdy)
+
+    def _enter_continue_or_exit_backoff(self):
         # Take care of backoff in the appropriate cases.  When this
         # happens, we set a failure on the backoff timer and set the RDY count to zero.
         # Once the backoff time has expired, we allow *one* of the connections let
@@ -335,12 +351,8 @@ class Reader(Client):
             return
 
         # we're out of backoff completely, return to full blast for all conns
-        if start_backoff_interval and not current_backoff_interval:
-            rdy = self._connection_max_in_flight()
-            logging.info('[%s] backoff complete, resuming normal operation (%d connections)',
-                         self.name, len(self.conns))
-            for c in self.conns.values():
-                self._send_rdy(c, rdy)
+        if not self.backoff_block_completed and not current_backoff_interval:
+            self._complete_backoff_block()
             return
 
         # enter or continue a backoff iteration
@@ -349,6 +361,7 @@ class Reader(Client):
 
     def _start_backoff_block(self):
         self.backoff_block = True
+        self.backoff_block_completed = False
         backoff_interval = self.backoff_timer.get_interval()
 
         logging.info('[%s] backing off for %0.2f seconds (%d connections)',
