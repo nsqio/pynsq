@@ -3,6 +3,8 @@ import time
 import functools
 import urllib
 import random
+import urlparse
+import cgi
 
 try:
     import simplejson as json
@@ -502,7 +504,17 @@ class Reader(Client):
         """
         endpoint = self.lookupd_http_addresses[self.lookupd_query_index]
         self.lookupd_query_index = (self.lookupd_query_index + 1) % len(self.lookupd_http_addresses)
-        lookupd_url = endpoint + '/lookup?topic=' + urllib.quote(self.topic)
+        
+        scheme, netloc, path, query, fragment = urlparse.urlsplit(endpoint)
+        
+        if not path or path == "/":
+            path = "/lookup"
+
+        params = cgi.parse_qs(query)
+        params['topic'] = self.topic
+        query = urllib.urlencode(_utf8_params(params), doseq=1)
+        lookupd_url = urlparse.urlunsplit((scheme, netloc, path, query, fragment))
+        
         req = tornado.httpclient.HTTPRequest(lookupd_url, method='GET',
                                              connect_timeout=1, request_timeout=2)
         callback = functools.partial(self._finish_query_lookupd, lookupd_url=lookupd_url)
@@ -633,3 +645,26 @@ class Reader(Client):
 
     def preprocess_message(self, message):
         return message
+
+def _utf8_params(params):
+    """encode a dictionary of URL parameters (including iterables) as utf-8"""
+    assert isinstance(params, dict)
+    encoded_params = []
+    for k, v in params.items():
+        if v is None:
+            continue
+        if isinstance(v, (int, long, float)):
+            v = str(v)
+        if isinstance(v, (list, tuple)):
+            v = [_utf8(x) for x in v]
+        else:
+            v = _utf8(v)
+        encoded_params.append((k, v))
+    return dict(encoded_params)
+
+def _utf8(s):
+    """encode a unicode string as utf-8"""
+    if isinstance(s, unicode):
+        return s.encode("utf-8")
+    assert isinstance(s, str), "_utf8 expected a str, not %r" % type(s)
+    return s
