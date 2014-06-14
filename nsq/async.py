@@ -86,14 +86,13 @@ class AsyncConn(EventedMixin):
     :param user_agent: a string identifying the agent for this client in the spirit of
         HTTP (default: ``<client_library_name>/<version>``) (requires nsqd 0.2.25+)
     
-    :param authentication_secret: a string passed to nsqauthd when usting nsqd authentication 
-        (requires nsqd 1.0+)
+    :param auth_secret: a string passed when using nsq auth (requires nsqd 1.0+)
     """
     def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
                  tls_v1=False, tls_options=None, snappy=False, user_agent=None,
                  output_buffer_size=16 * 1024, output_buffer_timeout=250, sample_rate=0,
                  io_loop=None,
-                 authentication_secret=None):
+                 auth_secret=None):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -103,7 +102,7 @@ class AsyncConn(EventedMixin):
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
-        assert isinstance(authentication_secret, (str, unicode, None.__class__))
+        assert isinstance(auth_secret, (str, unicode, None.__class__))
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
 
@@ -139,7 +138,7 @@ class AsyncConn(EventedMixin):
             self.user_agent = 'pynsq/%s' % __version__
         
         self._authentication_required = False # tracking server auth state
-        self.authentication_secret = authentication_secret
+        self.auth_secret = auth_secret
         super(AsyncConn, self).__init__()
 
     @property
@@ -315,11 +314,11 @@ class AsyncConn(EventedMixin):
             return
 
         self.off('response', self._on_response_continue)
-        if self.authentication_secret and self._authentication_required:
+        if self.auth_secret and self._authentication_required:
             self.on('response', self._on_auth_response)
-            self.trigger('auth', conn=self, data=self.authentication_secret)
+            self.trigger('auth', conn=self, data=self.auth_secret)
             try:
-                self.send(nsq.auth(self.authentication_secret))
+                self.send(nsq.auth(self.auth_secret))
             except Exception, e:
                 self.close()
                 self.trigger('error', conn=self, error=nsq.SendError('Error sending AUTH', e))
