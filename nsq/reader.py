@@ -260,13 +260,12 @@ class Reader(Client):
         self.total_rdy = max(self.total_rdy - 1, 0)
 
         rdy_conn = conn
-        if len(self.conns) > self.max_in_flight:
+        if len(self.conns) > self.max_in_flight and time.time() - self.random_rdy_ts > 30:
             # if all connections aren't getting RDY
             # occsionally randomize which connection gets RDY
-            time_since_random_rdy = time.time() - self.random_rdy_ts
-            if time_since_random_rdy > 30:
-                self.random_rdy_ts = time.time()
-                conns_with_no_rdy = [c for c in self.conns.itervalues() if not c.rdy]
+            self.random_rdy_ts = time.time()
+            conns_with_no_rdy = [c for c in self.conns.itervalues() if not c.rdy]
+            if conns_with_no_rdy:
                 rdy_conn = random.choice(conns_with_no_rdy)
                 if rdy_conn is not conn:
                     logging.info('[%s:%s] redistributing RDY to %s',
