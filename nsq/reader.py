@@ -114,6 +114,12 @@ class Reader(Client):
         lookupd pool loop. This helps evenly distribute requests even if multiple consumers
         restart at the same time.
 
+    :param lookupd_connect_timeout: the amount of time in seconds to wait for
+        a connection to ``nsqlookupd`` to be established
+
+    :param lookupd_request_timeout: the amount of time in seconds to wait for
+        a request to ``nsqlookupd`` to complete.
+
     :param low_rdy_idle_timeout: the amount of time in seconds to wait for a message from a producer
         when in a state where RDY counts are re-distributed (ie. max_in_flight < num_producers)
 
@@ -125,6 +131,7 @@ class Reader(Client):
                  nsqd_tcp_addresses=None, lookupd_http_addresses=None,
                  max_tries=5, max_in_flight=1, lookupd_poll_interval=60,
                  low_rdy_idle_timeout=10, max_backoff_duration=128, lookupd_poll_jitter=0.3,
+                 lookupd_connect_timeout=1, lookupd_request_timeout=2,
                  **kwargs):
         super(Reader, self).__init__(**kwargs)
 
@@ -135,6 +142,9 @@ class Reader(Client):
         assert isinstance(name, (str, unicode, None.__class__))
         assert isinstance(lookupd_poll_interval, int)
         assert isinstance(lookupd_poll_jitter, float)
+        assert isinstance(lookupd_connect_timeout, int)
+        assert isinstance(lookupd_request_timeout, int)
+
         assert lookupd_poll_jitter >= 0 and lookupd_poll_jitter <= 1
 
         if nsqd_tcp_addresses:
@@ -170,6 +180,8 @@ class Reader(Client):
         self.need_rdy_redistributed = False
         self.lookupd_poll_interval = lookupd_poll_interval
         self.lookupd_poll_jitter = lookupd_poll_jitter
+        self.lookupd_connect_timeout = lookupd_connect_timeout
+        self.lookupd_request_timeout = lookupd_request_timeout
         self.random_rdy_ts = time.time()
         self.conn_kwargs = kwargs
 
@@ -503,9 +515,9 @@ class Reader(Client):
         """
         endpoint = self.lookupd_http_addresses[self.lookupd_query_index]
         self.lookupd_query_index = (self.lookupd_query_index + 1) % len(self.lookupd_http_addresses)
-        
+
         scheme, netloc, path, query, fragment = urlparse.urlsplit(endpoint)
-        
+
         if not path or path == "/":
             path = "/lookup"
 
@@ -513,9 +525,11 @@ class Reader(Client):
         params['topic'] = self.topic
         query = urllib.urlencode(_utf8_params(params), doseq=1)
         lookupd_url = urlparse.urlunsplit((scheme, netloc, path, query, fragment))
-        
-        req = tornado.httpclient.HTTPRequest(lookupd_url, method='GET',
-                                             connect_timeout=1, request_timeout=2)
+
+        req = tornado.httpclient.HTTPRequest(
+            lookupd_url, method='GET',
+            connect_timeout=self.lookupd_connect_timeout,
+            request_timeout=self.lookupd_request_timeout)
         callback = functools.partial(self._finish_query_lookupd, lookupd_url=lookupd_url)
         self.http_client.fetch(req, callback=callback)
 
