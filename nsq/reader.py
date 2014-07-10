@@ -503,9 +503,9 @@ class Reader(Client):
         """
         endpoint = self.lookupd_http_addresses[self.lookupd_query_index]
         self.lookupd_query_index = (self.lookupd_query_index + 1) % len(self.lookupd_http_addresses)
-        
+
         scheme, netloc, path, query, fragment = urlparse.urlsplit(endpoint)
-        
+
         if not path or path == "/":
             path = "/lookup"
 
@@ -513,7 +513,7 @@ class Reader(Client):
         params['topic'] = self.topic
         query = urllib.urlencode(_utf8_params(params), doseq=1)
         lookupd_url = urlparse.urlunsplit((scheme, netloc, path, query, fragment))
-        
+
         req = tornado.httpclient.HTTPRequest(lookupd_url, method='GET',
                                              connect_timeout=1, request_timeout=2)
         callback = functools.partial(self._finish_query_lookupd, lookupd_url=lookupd_url)
