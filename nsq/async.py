@@ -26,6 +26,7 @@ import tornado.simple_httpclient
 
 import nsq
 from evented_mixin import EventedMixin
+from deflate_socket import DeflateSocket
 
 
 class AsyncConn(EventedMixin):
@@ -70,6 +71,11 @@ class AsyncConn(EventedMixin):
 
     :param snappy: enable Snappy stream compression (requires nsqd 0.2.23+)
 
+    :param deflate: enable deflate stream compression (requires nsqd 0.2.23+)
+
+    :param deflate_level: configure the deflate compression level for this connection
+        (requires nsqd 0.2.23+)
+
     :param output_buffer_size: size of the buffer (in bytes) used by nsqd for buffering writes
         to this connection
 
@@ -85,18 +91,19 @@ class AsyncConn(EventedMixin):
 
     :param user_agent: a string identifying the agent for this client in the spirit of
         HTTP (default: ``<client_library_name>/<version>``) (requires nsqd 0.2.25+)
-    
+
     :param auth_secret: a string passed when using nsq auth (requires nsqd 1.0+)
     """
     def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
-                 tls_v1=False, tls_options=None, snappy=False, user_agent=None,
-                 output_buffer_size=16 * 1024, output_buffer_timeout=250, sample_rate=0,
-                 io_loop=None,
+                 tls_v1=False, tls_options=None, snappy=False, deflate=False,
+                 deflate_level=6, user_agent=None, output_buffer_size=16 * 1024,
+                 output_buffer_timeout=250, sample_rate=0, io_loop=None,
                  auth_secret=None):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
         assert isinstance(tls_options, (dict, None.__class__))
+        assert isinstance(deflate_level, int)
         assert isinstance(heartbeat_interval, int) and heartbeat_interval >= 1
         assert isinstance(requeue_delay, int) and requeue_delay >= 0
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
@@ -121,6 +128,8 @@ class AsyncConn(EventedMixin):
         self.tls_v1 = tls_v1
         self.tls_options = tls_options
         self.snappy = snappy
+        self.deflate = deflate
+        self.deflate_level = deflate_level
         self.hostname = socket.gethostname()
         self.short_hostname = self.hostname.split('.')[0]
         self.heartbeat_interval = heartbeat_interval * 1000
@@ -136,7 +145,7 @@ class AsyncConn(EventedMixin):
 
         if self.user_agent is None:
             self.user_agent = 'pynsq/%s' % __version__
-        
+
         self._authentication_required = False # tracking server auth state
         self.auth_secret = auth_secret
         super(AsyncConn, self).__init__()
@@ -240,6 +249,19 @@ class AsyncConn(EventedMixin):
         self.socket.bootstrap(existing_data)
         self.stream.socket = self.socket
 
+    def upgrade_to_deflate(self):
+        # in order to upgrade to DEFLATE we need to use whatever IOStream
+        # is currently in place (normal or SSL)...
+        #
+        # first read any compressed bytes the existing IOStream might have
+        # already buffered and use that to bootstrap the DefalteSocket, then
+        # monkey patch the existing IOStream by replacing its socket
+        # with a wrapper that will automagically handle compression.
+        existing_data = self.stream._consume(self.stream._read_buffer_size)
+        self.socket = DeflateSocket(self.socket, self.deflate_level)
+        self.socket.bootstrap(existing_data)
+        self.stream.socket = self.socket
+
     def send_rdy(self, value):
         try:
             self.send(nsq.ready(value))
@@ -260,6 +282,8 @@ class AsyncConn(EventedMixin):
             'feature_negotiation': True,
             'tls_v1': self.tls_v1,
             'snappy': self.snappy,
+            'deflate': self.deflate,
+            'deflate_level': self.deflate_level,
             'output_buffer_timeout': self.output_buffer_timeout,
             'output_buffer_size': self.output_buffer_size,
             'sample_rate': self.sample_rate,
@@ -296,7 +320,9 @@ class AsyncConn(EventedMixin):
             self._features_to_enable.append('tls_v1')
         if self.snappy and data.get('snappy'):
             self._features_to_enable.append('snappy')
-        
+        if self.deflate and data.get('deflate'):
+            self._features_to_enable.append('deflate')
+
         if data.get('auth_required'):
             self._authentication_required = True
 
@@ -310,6 +336,8 @@ class AsyncConn(EventedMixin):
                 self.upgrade_to_tls(self.tls_options)
             elif feature == 'snappy':
                 self.upgrade_to_snappy()
+            elif feature == 'deflate':
+                self.upgrade_to_deflate()
             # the server will 'OK' after these conneciton upgrades triggering another response
             return
 
@@ -324,7 +352,7 @@ class AsyncConn(EventedMixin):
                 self.trigger('error', conn=self, error=nsq.SendError('Error sending AUTH', e))
             return
         self.trigger('ready', conn=self)
-    
+
     def _on_auth_response(self, data, **kwargs):
         try:
             data = json.loads(data)
@@ -337,7 +365,7 @@ class AsyncConn(EventedMixin):
         self.off('response', self._on_auth_response)
         self.trigger('auth_response', conn=self, data=data)
         return self.trigger('ready', conn=self)
-    
+
     def _on_data(self, data, **kwargs):
         self.last_recv_timestamp = time.time()
         frame, data = nsq.unpack_response(data)
