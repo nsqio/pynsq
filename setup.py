@@ -22,7 +22,7 @@ version = '0.6.3'
 setup(
     name='pynsq',
     version=version,
-    description="a Python module for NSQ",
+    description='official Python client library for NSQ',
     keywords='python nsq',
     author='Matt Reiferson',
     author_email='snakes@gmail.com',
