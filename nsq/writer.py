@@ -8,6 +8,8 @@ from client import Client
 import nsq
 import async
 
+logger = logging.getLogger(__name__)
+
 
 class Writer(Client):
     """
@@ -94,7 +96,7 @@ class Writer(Client):
         self.io_loop.add_callback(self._run)
 
     def _run(self):
-        logging.info('starting writer...')
+        logger.info('starting writer...')
         self.connect()
 
     def pub(self, topic, msg, callback=None):
@@ -122,7 +124,7 @@ class Writer(Client):
         try:
             conn.send(cmd(topic, msg))
         except Exception:
-            logging.exception('[%s] failed to send %s' % (conn.id, command))
+            logger.exception('[%s] failed to send %s' % (conn.id, command))
             conn.close()
 
     def _on_connection_error(self, conn, error, **kwargs):
@@ -159,14 +161,14 @@ class Writer(Client):
         if conn.id in self.conns:
             return
 
-        logging.info('[%s] connecting to nsqd', conn.id)
+        logger.info('[%s] connecting to nsqd', conn.id)
         conn.connect()
         conn.callback_queue = []
 
     def _on_connection_ready(self, conn, **kwargs):
         # re-check to make sure another connection didn't beat this one
         if conn.id in self.conns:
-            logging.warning(
+            logger.warning(
                 '[%s] connected but another matching connection already exists', conn.id)
             conn.close()
             return
@@ -180,15 +182,15 @@ class Writer(Client):
             try:
                 callback(conn, nsq.ConnectionClosedError())
             except Exception:
-                logging.exception('[%s] uncaught exception in callback', conn.id)
+                logger.exception('[%s] uncaught exception in callback', conn.id)
 
-        logging.warning('[%s] connection closed', conn.id)
-        logging.info('[%s] attempting to reconnect in %0.2fs', conn.id, self.reconnect_interval)
+        logger.warning('[%s] connection closed', conn.id)
+        logger.info('[%s] attempting to reconnect in %0.2fs', conn.id, self.reconnect_interval)
         reconnect_callback = functools.partial(self.connect_to_nsqd,
                                                host=conn.host, port=conn.port)
         self.io_loop.add_timeout(time.time() + self.reconnect_interval, reconnect_callback)
 
     def _finish_pub(self, conn, data, command, topic, msg):
         if isinstance(data, nsq.Error):
-            logging.error('[%s] failed to %s (%s, %s), data is %s',
+            logger.error('[%s] failed to %s (%s, %s), data is %s',
                           conn.id, command, topic, msg, data)
