@@ -27,12 +27,14 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         'output_buffer_timeout': 50
     }
 
+    nsqd_command = ['nsqd', '--verbose', '--snappy',
+                    '--tls-key=%s/tests/key.pem' % base_dir,
+                    '--tls-cert=%s/tests/cert.pem' % base_dir]
+
     def setUp(self):
         super(ReaderIntegrationTest, self).setUp()
         self.processes = []
-        proc = subprocess.Popen(['nsqd', '--verbose', '--snappy',
-                                 '--tls-key=%s/tests/key.pem' % base_dir,
-                                 '--tls-cert=%s/tests/cert.pem' % base_dir])
+        proc = subprocess.Popen(self.nsqd_command)
         self.processes.append(proc)
         http = tornado.httpclient.HTTPClient()
         start = time.time()
@@ -164,3 +166,33 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                         io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
                         heartbeat_interval=1)
         self.wait()
+
+
+class DeflateReaderIntegrationTest(ReaderIntegrationTest):
+
+    identify_options = {
+        'user_agent': 'sup',
+        'deflate': True,
+        'deflate_level': 6,
+        'tls_v1': True,
+        'tls_options': {'cert_reqs': ssl.CERT_NONE},
+        'heartbeat_interval': 10,
+        'output_buffer_size': 4096,
+        'output_buffer_timeout': 50
+    }
+
+    nsqd_command = ['nsqd', '--verbose', '--deflate',
+                    '--tls-key=%s/tests/key.pem' % base_dir,
+                    '--tls-cert=%s/tests/cert.pem' % base_dir]
+
+    def test_conn_identify_options(self):
+        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
+                                **self.identify_options)
+        c.on('identify_response', self.stop)
+        c.connect()
+        response = self.wait()
+        print response
+        assert response['conn'] is c
+        assert isinstance(response['data'], dict)
+        assert response['data']['deflate'] is True
+        assert response['data']['tls_v1'] is True
