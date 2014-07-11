@@ -1,12 +1,20 @@
 language: python
 python:
-  - "2.6"
-  - "2.7"
+  - 2.6
+  - 2.7
 env:
-  - TORNADO_VERSION=2.4.1
-  - TORNADO_VERSION=3.0.2
-  - TORNADO_VERSION=3.1.1
-  - TORNADO_VERSION=3.2
+  - NSQ_DOWNLOAD=nsq-0.2.24.linux-amd64.go1.2 TORNADO_VERSION=2.4.1
+  - NSQ_DOWNLOAD=nsq-0.2.24.linux-amd64.go1.2 TORNADO_VERSION=3.0.2
+  - NSQ_DOWNLOAD=nsq-0.2.24.linux-amd64.go1.2 TORNADO_VERSION=3.1.1
+  - NSQ_DOWNLOAD=nsq-0.2.24.linux-amd64.go1.2 TORNADO_VERSION=3.2
+  - NSQ_DOWNLOAD=nsq-0.2.27.linux-amd64.go1.2 TORNADO_VERSION=2.4.1
+  - NSQ_DOWNLOAD=nsq-0.2.27.linux-amd64.go1.2 TORNADO_VERSION=3.0.2
+  - NSQ_DOWNLOAD=nsq-0.2.27.linux-amd64.go1.2 TORNADO_VERSION=3.1.1
+  - NSQ_DOWNLOAD=nsq-0.2.27.linux-amd64.go1.2 TORNADO_VERSION=3.2
+  - NSQ_DOWNLOAD=nsq-0.2.28.linux-amd64.go1.2.1 TORNADO_VERSION=2.4.1
+  - NSQ_DOWNLOAD=nsq-0.2.28.linux-amd64.go1.2.1 TORNADO_VERSION=3.0.2
+  - NSQ_DOWNLOAD=nsq-0.2.28.linux-amd64.go1.2.1 TORNADO_VERSION=3.1.1
+  - NSQ_DOWNLOAD=nsq-0.2.28.linux-amd64.go1.2.1 TORNADO_VERSION=3.2
 install:
   - pip install simplejson
   - export PYCURL_SSL_LIBRARY=openssl
@@ -14,9 +22,9 @@ install:
   - pip install tornado==$TORNADO_VERSION
   - sudo apt-get install libsnappy-dev
   - pip install python-snappy
-  - wget https://github.com/bitly/nsq/releases/download/v0.2.26/nsq-0.2.26.linux-amd64.go1.2.tar.gz
-  - tar zxvf nsq-0.2.26.linux-amd64.go1.2.tar.gz
-  - sudo cp nsq-0.2.26.linux-amd64.go1.2/bin/nsqd nsq-0.2.26.linux-amd64.go1.2/bin/nsqlookupd /usr/local/bin
+  - wget http://bitly-downloads.s3.amazonaws.com/nsq/$NSQ_DOWNLOAD.tar.gz
+  - tar zxvf $NSQ_DOWNLOAD.tar.gz
+  - sudo cp $NSQ_DOWNLOAD/bin/nsqd $NSQ_DOWNLOAD/bin/nsqlookupd /usr/local/bin
 script: py.test
 notifications:
   email: false
