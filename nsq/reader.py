@@ -518,6 +518,10 @@ class Reader(Client):
         endpoint = self.lookupd_http_addresses[self.lookupd_query_index]
         self.lookupd_query_index = (self.lookupd_query_index + 1) % len(self.lookupd_http_addresses)
 
+        # urlsplit() is faulty if scheme not present
+        if '://' not in endpoint:
+            endpoint = 'http://' + endpoint
+
         scheme, netloc, path, query, fragment = urlparse.urlsplit(endpoint)
 
         if not path or path == "/":
