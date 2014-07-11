@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.3 - 2014-07-11
+
+ * #84 - use a named logger
+ * #83 - add `DEFLATE` support
+ * #80 - configurable `nsqlookupd` HTTP request timeouts
+ * #78 - fix potential `Reader` connection index error
+ * #77 - more flexible `nsqlookupd` configuration
+ * #76 - fix potential out-of-order backoff/resume
+ * #72 - `AUTH` support
+ * #73 - support 64char topic/channel names
+
 ## 0.6.2 - 2014-02-21
 
 IMPORTANT: this is a bug-fix release to address an issue where `Reader` would raise
