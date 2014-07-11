@@ -28,6 +28,8 @@ import nsq
 from evented_mixin import EventedMixin
 from deflate_socket import DeflateSocket
 
+logger = logging.getLogger(__name__)
+
 
 class AsyncConn(EventedMixin):
     """
@@ -203,7 +205,7 @@ class AsyncConn(EventedMixin):
         try:
             self.trigger('data', conn=self, data=data)
         except Exception:
-            logging.exception('uncaught exception in data event')
+            logger.exception('uncaught exception in data event')
         self.io_loop.add_callback(self._start_read)
 
     def send(self, data):
@@ -302,7 +304,7 @@ class AsyncConn(EventedMixin):
         self.off('response', self._on_identify_response)
 
         if data == 'OK':
-            logging.warning('nsqd version does not support feature netgotiation')
+            logger.warning('nsqd version does not support feature netgotiation')
             return self.trigger('ready', conn=self)
 
         try:

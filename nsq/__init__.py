@@ -16,7 +16,7 @@ from version import __version__  # NOQA
 
 
 def _handle_term_signal(sig_num, frame):
-    logging.info('TERM Signal handler called with signal %r' % sig_num)
+    logging.getLogger(__name__).info('TERM Signal handler called with signal %r' % sig_num)
     tornado.ioloop.IOLoop.instance().stop()
 
 
