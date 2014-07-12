@@ -56,6 +56,20 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
             os.kill(proc.pid, signal.SIGKILL)
             proc.wait()
 
+    def test_bad_reader_arguments(self):
+        topic = 'test_reader_msgs_%s' % time.time()
+        bad_options = dict(self.identify_options)
+        bad_options.update(dict(foo=10))
+        handler = lambda x: None
+
+        self.assertRaises(
+            AssertionError,
+            nsq.Reader,
+            nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic,
+            channel='ch', io_loop=self.io_loop,
+            message_handler=handler, max_in_flight=100,
+            **bad_options)
+
     def test_conn_identify(self):
         c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
         c.on('identify_response', self.stop)

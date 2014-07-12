@@ -7,6 +7,7 @@ import random
 from client import Client
 import nsq
 import async
+import inspect
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,12 @@ class Writer(Client):
         self.name = name or nsqd_tcp_addresses[0]
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
         self.conns = {}
+
+        # Verify keyword arguments
+        valid_args = inspect.getargspec(async.AsyncConn.__init__).args
+        diff = set(kwargs) - set(valid_args)
+        assert len(diff) == 0, 'Invalid keyword argument(s): %s' % list(diff)
+
         self.conn_kwargs = kwargs
         assert isinstance(reconnect_interval, (int, float))
         self.reconnect_interval = reconnect_interval
@@ -132,7 +139,7 @@ class Writer(Client):
         while conn.callback_queue:
             callback = conn.callback_queue.pop(0)
             callback(conn, error)
-    
+
     def _on_connection_response(self, conn, data=None, **kwargs):
         if conn.callback_queue:
             callback = conn.callback_queue.pop(0)

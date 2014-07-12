@@ -18,6 +18,7 @@ from backoff_timer import BackoffTimer
 from client import Client
 import nsq
 import async
+import inspect
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,12 @@ class Reader(Client):
         self.lookupd_connect_timeout = lookupd_connect_timeout
         self.lookupd_request_timeout = lookupd_request_timeout
         self.random_rdy_ts = time.time()
+
+        # Verify keyword arguments
+        valid_args = inspect.getargspec(async.AsyncConn.__init__).args
+        diff = set(kwargs) - set(valid_args)
+        assert len(diff) == 0, 'Invalid keyword argument(s): %s' % list(diff)
+
         self.conn_kwargs = kwargs
 
         self.backoff_timer = BackoffTimer(0, max_backoff_duration)
