@@ -6,9 +6,9 @@ import random
 import time
 
 if six.PY2:
-    from mock import patch, create_autospec
+    from mock import patch, create_autospec, Mock
 else:
-    from unittest.mock import patch, create_autospec
+    from unittest.mock import patch, create_autospec, Mock
 
 from tornado.ioloop import IOLoop
 
@@ -59,6 +59,7 @@ def _get_message(conn):
 
 def test_backoff_easy():
     mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop.time = Mock()
     mock_ioloop.time.return_value = time.time()
     r = _get_reader(mock_ioloop)
     conn = _get_conn(r)
@@ -100,6 +101,7 @@ def test_backoff_easy():
 
 def test_backoff_out_of_order():
     mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop.time = Mock()
     mock_ioloop.time.return_value = time.time()
     r = _get_reader(mock_ioloop, max_in_flight=4)
     conn1 = _get_conn(r)
@@ -146,6 +148,7 @@ def test_backoff_out_of_order():
 
 def test_backoff_hard():
     mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop.time = Mock()
     mock_ioloop.time.return_value = time.time()
     r = _get_reader(io_loop=mock_ioloop)
     conn = _get_conn(r)
@@ -214,6 +217,7 @@ def test_backoff_hard():
 
 def test_backoff_many_conns():
     mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop.time = Mock()
     mock_ioloop.time.return_value = time.time()
     r = _get_reader(io_loop=mock_ioloop)
 
@@ -312,6 +316,7 @@ def test_backoff_many_conns():
 
 def test_backoff_conns_disconnect():
     mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop.time = Mock()
     mock_ioloop.time.return_value = time.time()
     r = _get_reader(io_loop=mock_ioloop)
 
