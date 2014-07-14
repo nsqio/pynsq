@@ -21,6 +21,7 @@ install:
   - pip install simplejson
   - export PYCURL_SSL_LIBRARY=openssl
   - pip install pycurl
+  - pip install six
   - pip install tornado==$TORNADO_VERSION
   - sudo apt-get install libsnappy-dev
   - pip install python-snappy
