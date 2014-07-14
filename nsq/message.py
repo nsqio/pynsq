@@ -1,4 +1,4 @@
-from evented_mixin import EventedMixin
+from .evented_mixin import EventedMixin
 
 
 class Message(EventedMixin):

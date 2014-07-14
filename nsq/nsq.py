@@ -6,11 +6,12 @@ try:
 except ImportError:
     import json  # pyflakes.ignore
 
-from message import Message
+from .message import Message
+import six
 
 
-MAGIC_V2 = '  V2'
-NL = '\n'
+MAGIC_V2 = b'  V2'
+NL = b'\n'
 
 FRAME_TYPE_RESPONSE = 0
 FRAME_TYPE_ERROR = 1
@@ -52,62 +53,80 @@ def decode_message(data):
 
 
 def _command(cmd, body, *params):
-    body_data = ''
-    params_data = ''
+    body_data = b''
+    params_data = bytearray()
+
+    assert isinstance(cmd, six.binary_type)
+
     if body:
-        assert isinstance(body, str), 'body must be a string'
+        assert isinstance(body, six.string_types + (six.binary_type,)), \
+            'body must be a string or binary type'
+        if not isinstance(body, six.binary_type):
+            body = body.encode('utf-8')
+
         body_data = struct.pack('>l', len(body)) + body
-    if len(params):
-        params = [p.encode('utf-8') if isinstance(p, unicode) else p for p in params]
-        params_data = ' ' + ' '.join(params)
-    return '%s%s%s%s' % (cmd, params_data, NL, body_data)
+    for p in params:
+        assert isinstance(p, six.string_types + (six.binary_type,)), \
+            'params must be a string or binary type'
+        if not isinstance(p, six.binary_type):
+            p = p.encode('utf-8')
+
+        params_data += b' ' + p
+
+    assert isinstance(body_data, six.binary_type)
+    return bytes(cmd + params_data + NL + body_data)
 
 
 def subscribe(topic, channel):
     assert valid_topic_name(topic)
     assert valid_channel_name(channel)
-    return _command('SUB', None, topic, channel)
+    return _command(b'SUB', None, topic, channel)
 
 
 def identify(data):
-    return _command('IDENTIFY', json.dumps(data))
+    return _command(b'IDENTIFY', json.dumps(data))
+
 
 def auth(data):
-    return _command('AUTH', data)
+    return _command(b'AUTH', data)
+
 
 def ready(count):
     assert isinstance(count, int), 'ready count must be an integer'
     assert count >= 0, 'ready count cannot be negative'
-    return _command('RDY', None, str(count))
+    return _command(b'RDY', None, str(count))
 
 
 def finish(id):
-    return _command('FIN', None, id)
+    return _command(b'FIN', None, id)
 
 
 def requeue(id, time_ms=0):
     assert isinstance(time_ms, int), 'requeue time_ms must be an integer'
-    return _command('REQ', None, id, str(time_ms))
+    return _command(b'REQ', None, id, str(time_ms))
 
 
 def touch(id):
-    return _command('TOUCH', None, id)
+    return _command(b'TOUCH', None, id)
 
 
 def nop():
-    return _command('NOP', None)
+    return _command(b'NOP', None)
 
 
 def pub(topic, data):
-    return _command('PUB', data, topic)
+    assert valid_topic_name(topic)
+    return _command(b'PUB', data, topic)
 
 
 def mpub(topic, data):
+    assert valid_topic_name(topic)
+
     assert isinstance(data, (set, list))
     body = struct.pack('>l', len(data))
     for m in data:
         body += struct.pack('>l', len(m)) + m
-    return _command('MPUB', body, topic)
+    return _command(b'MPUB', body, topic)
 
 
 def valid_topic_name(topic):
