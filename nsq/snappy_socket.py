@@ -29,6 +29,7 @@ class SnappySocket(object):
             self._bootstrapped = None
             return data
         chunk = method(size)
+        uncompressed = None
         if chunk:
             uncompressed = self._decompressor.decompress(chunk)
         if not uncompressed:
