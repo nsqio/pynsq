@@ -402,6 +402,9 @@ class AsyncConn(EventedMixin):
 
         if backoff:
             self.trigger('backoff', conn=self)
+        else:
+            self.trigger('continue', conn=self)
+            
 
     def _on_message_finish(self, message, **kwargs):
         self.in_flight -= 1

@@ -347,8 +347,9 @@ class Reader(Client):
     def _on_backoff_resume(self, success, **kwargs):
         if success:
             self.backoff_timer.success()
-        elif not self.backoff_block:
+        elif success is False and not self.backoff_block:
             self.backoff_timer.failure()
+        
         self._enter_continue_or_exit_backoff()
 
     def _complete_backoff_block(self):
@@ -445,6 +446,7 @@ class Reader(Client):
         conn.on('heartbeat', self._on_heartbeat)
         conn.on('backoff', functools.partial(self._on_backoff_resume, success=False))
         conn.on('resume', functools.partial(self._on_backoff_resume, success=True))
+        conn.on('continue', functools.partial(self._on_backoff_resume, success=None))
 
         if conn.id in self.conns:
             return
