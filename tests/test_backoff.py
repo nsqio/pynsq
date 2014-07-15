@@ -136,6 +136,69 @@ def test_backoff_out_of_order():
     ]
     assert conn2.stream.write.call_args_list == [((arg,),) for arg in expected_args]
 
+def test_backoff_requeue_recovery():
+    mock_ioloop = create_autospec(IOLoop)
+    r = _get_reader(mock_ioloop, max_in_flight=2)
+    conn = _get_conn(r)
+    msg = _send_message(conn)
+
+    msg.trigger('finish', message=msg)
+    assert r.backoff_block is False
+    assert r.backoff_timer.get_interval() == 0
+    assert mock_ioloop.add_timeout.call_count == 1
+
+    msg = _send_message(conn)
+
+    # go into backoff, 
+    msg.trigger('requeue', message=msg)
+    assert r.backoff_block is True
+    assert r.backoff_timer.get_interval() > 0
+    assert mock_ioloop.add_timeout.call_count == 2
+    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
+
+    # elapse time
+    timeout_args[1]()
+    assert r.backoff_block is False
+    assert r.backoff_timer.get_interval() != 0
+    
+    msg = _send_message(conn)
+
+    # This should not move out of backoff (since backoff=False)
+    msg.trigger('requeue', message=msg, backoff=False)
+    assert r.backoff_block is True
+    assert r.backoff_timer.get_interval() != 0
+    assert mock_ioloop.add_timeout.call_count == 3
+    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
+
+    # elapse time
+    timeout_args[1]()
+    assert r.backoff_block is False
+    assert r.backoff_timer.get_interval() != 0
+
+    # this should move out of backoff state
+    msg = _send_message(conn)
+    msg.trigger('finish', message=msg)
+    assert r.backoff_block is False
+    assert r.backoff_timer.get_interval() == 0
+    
+    print conn.stream.write.call_args_list
+
+    expected_args = [
+        'SUB test test\n',
+        'RDY 1\n',
+        'RDY 2\n',
+        'FIN 1234\n',
+        'REQ 1234 0\n',
+        'RDY 0\n',
+        'RDY 1\n',
+        'REQ 1234 0\n',
+        'RDY 0\n',
+        'RDY 1\n',
+        'FIN 1234\n',
+        'RDY 2\n',
+    ]
+    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+
 
 def test_backoff_hard():
     mock_ioloop = create_autospec(IOLoop)
