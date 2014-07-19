@@ -296,11 +296,11 @@ class Reader(Client):
 
         success = False
         try:
-            pre_processed_message = self.preprocess_message(message)
-            if not self.validate_message(pre_processed_message):
-                return message.finish()
             if message.attempts > self.max_tries:
                 self.giving_up(message)
+                return message.finish()
+            pre_processed_message = self.preprocess_message(message)
+            if not self.validate_message(pre_processed_message):
                 return message.finish()
             success = self.process_message(message)
         except Exception:
@@ -656,8 +656,8 @@ class Reader(Client):
 
         :param message: the :class:`nsq.Message` received
         """
-        logger.warning('[%s] giving up on message %s after max tries %d %r',
-                        self.name, message.id, self.max_tries, message.body)
+        logger.warning('[%s] giving up on message %s after %d tries (max:%d) %r',
+                        self.name, message.id, message.attempts, self.max_tries, message.body)
 
     def disabled(self):
         """
