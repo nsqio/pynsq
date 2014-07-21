@@ -28,6 +28,9 @@ class SendError(Error):
 
     def __str__(self):
         return 'SendError: %s (%s)' % (self.msg, self.error)
+    
+    def __repr__(self):
+        return 'SendError: %s (%s)' % (self.msg, self.error)
 
 
 class ConnectionClosedError(Error):
