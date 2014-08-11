@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.4 - 2014-08-11
+
+ * #91 - change order of max attempts check
+ * #89 - properly handle `requeue(backoff=False)` when in backoff state
+ * #87 - verify keyword args passed to `Reader`
+ * #85 - fix `nsqlookupd` addresses specified without scheme
+
 ## 0.6.3 - 2014-07-11
 
  * #84 - use a named logger
