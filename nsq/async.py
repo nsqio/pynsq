@@ -21,9 +21,13 @@ except ImportError:
     import json  # pyflakes.ignore
 
 import tornado.iostream
-from tornado.iostream import StreamClosedError
 import tornado.ioloop
 import tornado.simple_httpclient
+try:
+    from tornado.iostream import StreamClosedError
+except ImportError:
+    #  Tornado 2.4.x does not have StreamClosedError
+    StreamClosedError = IOError # pyflakes.ignore
 
 import nsq
 from evented_mixin import EventedMixin
