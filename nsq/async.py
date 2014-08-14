@@ -23,6 +23,11 @@ except ImportError:
 import tornado.iostream
 import tornado.ioloop
 import tornado.simple_httpclient
+try:
+    from tornado.iostream import StreamClosedError
+except ImportError:
+    #  Tornado 2.4.x does not have StreamClosedError
+    StreamClosedError = IOError # pyflakes.ignore
 
 import nsq
 from evented_mixin import EventedMixin
@@ -183,7 +188,11 @@ class AsyncConn(EventedMixin):
         self.trigger('connect', conn=self)
 
     def _start_read(self):
-        self.stream.read_bytes(4, self._read_size)
+        try:
+            self.stream.read_bytes(4, self._read_size)
+        except StreamClosedError:
+            # see https://github.com/bitly/pynsq/issues/93
+            pass
 
     def _socket_close(self):
         self.state = 'DISCONNECTED'
