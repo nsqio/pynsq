@@ -200,4 +200,4 @@ class Writer(Client):
     def _finish_pub(self, conn, data, command, topic, msg):
         if isinstance(data, nsq.Error):
             logger.error('[%s] failed to %s (%s, %s), data is %s',
-                          conn.id, command, topic, msg, data)
+                         conn.id if conn else 'NA', command, topic, msg, data)
