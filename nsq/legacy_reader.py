@@ -1,5 +1,7 @@
+from __future__ import absolute_import
+
 import warnings
-from reader import Reader
+from .reader import Reader
 
 
 class LegacyReader(object):

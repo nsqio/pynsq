@@ -55,7 +55,7 @@ class Client(object):
 
         # first get the list of stale connections, then close
         # (`conn.close()` may modify the list of connections while we're iterating)
-        stale_connections = [conn for conn in self.conns.values() if is_stale(conn)]
+        stale_connections = [conn for conn in list(self.conns.values()) if is_stale(conn)]
         for conn in stale_connections:
             timestamp = conn.last_recv_timestamp
             # this connection hasnt received data for more than

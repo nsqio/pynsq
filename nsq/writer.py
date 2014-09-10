@@ -4,10 +4,11 @@ import time
 import functools
 import random
 
-from client import Client
-import nsq
-import async
+from .client import Client
+from . import nsq
+from . import async
 import inspect
+import six
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,8 @@ class Writer(Client):
         super(Writer, self).__init__(**kwargs)
 
         if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
-            assert isinstance(nsqd_tcp_addresses, (str, unicode))
+            assert isinstance(nsqd_tcp_addresses,
+                              six.string_types)
             nsqd_tcp_addresses = [nsqd_tcp_addresses]
         assert nsqd_tcp_addresses
 
@@ -110,7 +112,7 @@ class Writer(Client):
         self._pub('pub', topic, msg, callback)
 
     def mpub(self, topic, msg, callback=None):
-        if isinstance(msg, (str, unicode)):
+        if isinstance(msg, six.string_types + (six.text_type,)):
             msg = [msg]
         assert isinstance(msg, (list, set, tuple))
 
@@ -125,7 +127,7 @@ class Writer(Client):
             callback(None, nsq.SendError('no connections'))
             return
 
-        conn = random.choice(self.conns.values())
+        conn = random.choice(list(self.conns.values()))
         conn.callback_queue.append(callback)
         cmd = getattr(nsq, command)
         try:
@@ -151,7 +153,7 @@ class Writer(Client):
             self.connect_to_nsqd(host, int(port))
 
     def connect_to_nsqd(self, host, port):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, six.string_types)
         assert isinstance(port, int)
 
         conn = async.AsyncConn(host, port, **self.conn_kwargs)
