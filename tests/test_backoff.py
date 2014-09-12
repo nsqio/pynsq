@@ -136,6 +136,7 @@ def test_backoff_out_of_order():
     ]
     assert conn2.stream.write.call_args_list == [((arg,),) for arg in expected_args]
 
+
 def test_backoff_requeue_recovery():
     mock_ioloop = create_autospec(IOLoop)
     r = _get_reader(mock_ioloop, max_in_flight=2)
@@ -149,7 +150,7 @@ def test_backoff_requeue_recovery():
 
     msg = _send_message(conn)
 
-    # go into backoff, 
+    # go into backoff
     msg.trigger('requeue', message=msg)
     assert r.backoff_block is True
     assert r.backoff_timer.get_interval() > 0
@@ -160,7 +161,7 @@ def test_backoff_requeue_recovery():
     timeout_args[1]()
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() != 0
-    
+
     msg = _send_message(conn)
 
     # This should not move out of backoff (since backoff=False)
@@ -180,7 +181,7 @@ def test_backoff_requeue_recovery():
     msg.trigger('finish', message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
-    
+
     print conn.stream.write.call_args_list
 
     expected_args = [

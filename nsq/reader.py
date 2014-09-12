@@ -290,7 +290,7 @@ class Reader(Client):
                 rdy_conn = random.choice(conns_with_no_rdy)
                 if rdy_conn is not conn:
                     logger.info('[%s:%s] redistributing RDY to %s',
-                                 conn.id, self.name, rdy_conn.id)
+                                conn.id, self.name, rdy_conn.id)
 
         self._maybe_update_rdy(rdy_conn)
 
@@ -305,7 +305,7 @@ class Reader(Client):
             success = self.process_message(message)
         except Exception:
             logger.exception('[%s:%s] uncaught exception while handling message %s body:%r',
-                              conn.id, self.name, message.id, message.body)
+                             conn.id, self.name, message.id, message.body)
             if not message.has_responded():
                 return message.requeue()
 
@@ -349,14 +349,14 @@ class Reader(Client):
             self.backoff_timer.success()
         elif success is False and not self.backoff_block:
             self.backoff_timer.failure()
-        
+
         self._enter_continue_or_exit_backoff()
 
     def _complete_backoff_block(self):
         self.backoff_block_completed = True
         rdy = self._connection_max_in_flight()
         logger.info('[%s] backoff complete, resuming normal operation (%d connections)',
-                     self.name, len(self.conns))
+                    self.name, len(self.conns))
         for c in self.conns.values():
             self._send_rdy(c, rdy)
 
@@ -388,7 +388,7 @@ class Reader(Client):
         backoff_interval = self.backoff_timer.get_interval()
 
         logger.info('[%s] backing off for %0.2f seconds (%d connections)',
-                     self.name, backoff_interval, len(self.conns))
+                    self.name, backoff_interval, len(self.conns))
         for c in self.conns.values():
             self._send_rdy(c, 0)
 
@@ -551,19 +551,19 @@ class Reader(Client):
     def _finish_query_lookupd(self, response, lookupd_url):
         if response.error:
             logger.warning('[%s] lookupd %s query error: %s',
-                            self.name, lookupd_url, response.error)
+                           self.name, lookupd_url, response.error)
             return
 
         try:
             lookup_data = json.loads(response.body)
         except ValueError:
             logger.warning('[%s] lookupd %s failed to parse JSON: %r',
-                            self.name, lookupd_url, response.body)
+                           self.name, lookupd_url, response.body)
             return
 
         if lookup_data['status_code'] != 200:
             logger.warning('[%s] lookupd %s responded with %d',
-                            self.name, lookupd_url, lookup_data['status_code'])
+                           self.name, lookupd_url, lookup_data['status_code'])
             return
 
         for producer in lookup_data['data']['producers']:
@@ -590,13 +590,13 @@ class Reader(Client):
         if len(self.conns) > self.max_in_flight:
             self.need_rdy_redistributed = True
             logger.debug('redistributing RDY state (%d conns > %d max_in_flight)',
-                          len(self.conns), self.max_in_flight)
+                         len(self.conns), self.max_in_flight)
 
         backoff_interval = self.backoff_timer.get_interval()
         if backoff_interval and len(self.conns) > 1:
             self.need_rdy_redistributed = True
             logger.debug('redistributing RDY state (%d backoff interval and %d conns > 1)',
-                          backoff_interval, len(self.conns))
+                         backoff_interval, len(self.conns))
 
         if self.need_rdy_redistributed:
             self.need_rdy_redistributed = False
@@ -606,7 +606,7 @@ class Reader(Client):
             for conn_id, conn in self.conns.iteritems():
                 last_message_duration = time.time() - conn.last_msg_timestamp
                 logger.debug('[%s:%s] rdy: %d (last message received %.02fs)',
-                              conn.id, self.name, conn.rdy, last_message_duration)
+                             conn.id, self.name, conn.rdy, last_message_duration)
                 if conn.rdy > 0 and last_message_duration > self.low_rdy_idle_timeout:
                     logger.info('[%s:%s] idle connection, giving up RDY count', conn.id, self.name)
                     self._send_rdy(conn, 0)
@@ -657,7 +657,7 @@ class Reader(Client):
         :param message: the :class:`nsq.Message` received
         """
         logger.warning('[%s] giving up on message %s after %d tries (max:%d) %r',
-                        self.name, message.id, message.attempts, self.max_tries, message.body)
+                       self.name, message.id, message.attempts, self.max_tries, message.body)
 
     def disabled(self):
         """
@@ -674,6 +674,7 @@ class Reader(Client):
     def preprocess_message(self, message):
         return message
 
+
 def _utf8_params(params):
     """encode a dictionary of URL parameters (including iterables) as utf-8"""
     assert isinstance(params, dict)
@@ -689,6 +690,7 @@ def _utf8_params(params):
             v = _utf8(v)
         encoded_params.append((k, v))
     return dict(encoded_params)
+
 
 def _utf8(s):
     """encode a unicode string as utf-8"""

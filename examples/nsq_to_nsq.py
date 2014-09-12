@@ -10,6 +10,7 @@ import functools
 import logging
 from host_pool import HostPool
 
+
 class NSQProxy:
     def __init__(self, topic, nsqds):
         self.topic = topic
@@ -18,7 +19,8 @@ class NSQProxy:
     def relay(self, nsq_message):
         nsq_message.enable_async()
         writer = self.writer_pool.get()
-        callback = functools.partial(self._on_message_response, nsq_message=nsq_message, writer=writer)
+        callback = functools.partial(
+            self._on_message_response, nsq_message=nsq_message, writer=writer)
         writer.pub(self.topic, nsq_message.body, callback)
 
     def _on_message_response(self, conn, data, nsq_message, writer):
@@ -29,6 +31,7 @@ class NSQProxy:
         else:
             self.writer_pool.success(writer)
             nsq_message.finish()
+
 
 if __name__ == "__main__":
     tornado.options.define('destination_topic', type=str)
@@ -45,8 +48,10 @@ if __name__ == "__main__":
     assert tornado.options.options.destination_nsqd_tcp_address
     assert tornado.options.options.channel
 
-    destination_topic = str(tornado.options.options.destination_topic or tornado.options.options.topic)
-    lookupd_http_addresses = map(lambda addr: 'http://' + addr, tornado.options.options.lookupd_http_address)
+    destination_topic = str(tornado.options.options.destination_topic or
+                            tornado.options.options.topic)
+    lookupd_http_addresses = map(lambda addr: 'http://' + addr,
+                                 tornado.options.options.lookupd_http_address)
 
     proxy = NSQProxy(destination_topic, tornado.options.options.destination_nsqd_tcp_address)
 

@@ -23,10 +23,10 @@ class Client(object):
         logger.info('[%s:%s] IDENTIFY received %r' % (conn.id, self.name, data))
         if conn.tls_v1 and not data.get('tls_v1'):
             logger.warning('[%s:%s] tls_v1 requested but disabled, could not negotiate feature',
-                            conn.id, self.name)
+                           conn.id, self.name)
         if conn.snappy and not data.get('snappy'):
             logger.warning('[%s:%s] snappy requested but disabled, could not negotiate feature',
-                            conn.id, self.name)
+                           conn.id, self.name)
 
     def _on_connection_auth(self, conn, data, **kwargs):
         logger.info('[%s:%s] AUTH sent' % (conn.id, self.name))
@@ -61,7 +61,7 @@ class Client(object):
             # this connection hasnt received data for more than
             # the configured heartbeat interval, close it
             logger.warning('[%s:%s] connection is stale (%.02fs), closing',
-                            conn.id, self.name, (now - timestamp))
+                           conn.id, self.name, (now - timestamp))
             conn.close()
 
     def _on_heartbeat(self, conn):

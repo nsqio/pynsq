@@ -28,7 +28,7 @@ class SendError(Error):
 
     def __str__(self):
         return 'SendError: %s (%s)' % (self.msg, self.error)
-    
+
     def __repr__(self):
         return 'SendError: %s (%s)' % (self.msg, self.error)
 
@@ -75,8 +75,10 @@ def subscribe(topic, channel):
 def identify(data):
     return _command('IDENTIFY', json.dumps(data))
 
+
 def auth(data):
     return _command('AUTH', data)
+
 
 def ready(count):
     assert isinstance(count, int), 'ready count must be an integer'
