@@ -391,6 +391,11 @@ class AsyncConn(EventedMixin):
             self.trigger('error', conn=self, error=nsq.Error(data))
 
     def _on_message_requeue(self, message, backoff=True, time_ms=-1, **kwargs):
+        if backoff:
+            self.trigger('backoff', conn=self)
+        else:
+            self.trigger('continue', conn=self)
+
         self.in_flight -= 1
         try:
             time_ms = self.requeue_delay * message.attempts * 1000 if time_ms < 0 else time_ms
@@ -400,12 +405,9 @@ class AsyncConn(EventedMixin):
             self.trigger('error', conn=self, error=nsq.SendError(
                 'failed to send REQ %s @ %d' % (message.id, time_ms), e))
 
-        if backoff:
-            self.trigger('backoff', conn=self)
-        else:
-            self.trigger('continue', conn=self)
-
     def _on_message_finish(self, message, **kwargs):
+        self.trigger('resume', conn=self)
+
         self.in_flight -= 1
         try:
             self.send(nsq.finish(message.id))
@@ -413,8 +415,6 @@ class AsyncConn(EventedMixin):
             self.close()
             self.trigger('error', conn=self,
                          error=nsq.SendError('failed to send FIN %s' % message.id, e))
-
-        self.trigger('resume', conn=self)
 
     def _on_message_touch(self, message, **kwargs):
         try:
