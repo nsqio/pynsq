@@ -148,7 +148,7 @@ class AsyncConn(EventedMixin):
         if self.user_agent is None:
             self.user_agent = 'pynsq/%s' % __version__
 
-        self._authentication_required = False # tracking server auth state
+        self._authentication_required = False  # tracking server auth state
         self.auth_secret = auth_secret
         super(AsyncConn, self).__init__()
 
@@ -404,7 +404,6 @@ class AsyncConn(EventedMixin):
             self.trigger('backoff', conn=self)
         else:
             self.trigger('continue', conn=self)
-            
 
     def _on_message_finish(self, message, **kwargs):
         self.in_flight -= 1
