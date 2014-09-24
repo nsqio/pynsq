@@ -583,6 +583,8 @@ class Reader(Client):
         # At a high level, we're trying to mitigate stalls related to low-volume
         # producers when we're unable (by configuration or backoff) to provide a RDY count
         # of (at least) 1 to all of our connections.
+        if not self.conns:
+            return
 
         if self.disabled() or self.backoff_block:
             return
