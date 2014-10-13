@@ -215,23 +215,36 @@ class Reader(Client):
             address, port = addr.split(':')
             self.connect_to_nsqd(address, int(port))
 
-        tornado.ioloop.PeriodicCallback(self._redistribute_rdy_state,
-                                        5 * 1000,
-                                        io_loop=self.io_loop).start()
+        self.redist_periodic = tornado.ioloop.PeriodicCallback(
+            self._redistribute_rdy_state,
+            5 * 1000,
+            io_loop=self.io_loop)
+        self.redist_periodic.start()
 
         if not self.lookupd_http_addresses:
             return
         # trigger the first lookup query manually
         self.query_lookupd()
 
-        periodic = tornado.ioloop.PeriodicCallback(self.query_lookupd,
-                                                   self.lookupd_poll_interval * 1000,
-                                                   io_loop=self.io_loop)
+        self.query_periodic = tornado.ioloop.PeriodicCallback(
+            self.query_lookupd,
+            self.lookupd_poll_interval * 1000,
+            io_loop=self.io_loop)
 
         # randomize the time we start this poll loop so that all
         # consumers don't query at exactly the same time
         delay = random.random() * self.lookupd_poll_interval * self.lookupd_poll_jitter
-        self.io_loop.add_timeout(time.time() + delay, periodic.start)
+        self.io_loop.add_timeout(time.time() + delay, self.query_periodic.start)
+
+    def close(self):
+        """
+        Closes all connections stops all periodic callbacks
+        """
+        for conn in self.conns.values():
+            conn.close()
+
+        self.redist_periodic.stop()
+        self.query_periodic.stop()
 
     def set_message_handler(self, message_handler):
         """
