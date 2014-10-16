@@ -102,6 +102,8 @@ def touch(id):
 def nop():
     return _command('NOP', None)
 
+def cls():
+    return _command('CLS', None)
 
 def pub(topic, data):
     return _command('PUB', data, topic)

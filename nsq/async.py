@@ -189,6 +189,15 @@ class AsyncConn(EventedMixin):
         self.state = 'DISCONNECTED'
         self.trigger('close', conn=self)
 
+    def send_cls(self):
+        try:
+            self.send(nsq.cls())
+        except Exception, e:
+            self.trigger('error', conn=self,
+                         error=nsq.SendError('failed to send CLS'))
+            return False
+        return True
+        
     def close(self):
         self.stream.close()
 

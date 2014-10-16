@@ -240,7 +240,12 @@ class Reader(Client):
         """
         Closes all connections stops all periodic callbacks
         """
+        
         for conn in self.conns.values():
+            try:
+                conn.send_cls()
+            except Exception, e:
+                pass
             conn.close()
 
         self.redist_periodic.stop()
