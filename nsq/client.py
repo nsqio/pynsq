@@ -78,3 +78,17 @@ class Client(object):
         :param conn: the :class:`nsq.AsyncConn` over which the heartbeat was received
         """
         pass
+
+    def close(self):
+        """
+        Closes all connections stops all periodic callbacks
+        """
+        
+        for conn in self.conns.values():
+            try:
+                conn.send_cls()
+            except Exception, e:
+                logger.warning('[%s:%s] error sending CLS, closing'
+                               conn.id, self.name)
+            conn.close()
+    

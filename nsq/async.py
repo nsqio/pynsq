@@ -188,15 +188,6 @@ class AsyncConn(EventedMixin):
     def _socket_close(self):
         self.state = 'DISCONNECTED'
         self.trigger('close', conn=self)
-
-    def send_cls(self):
-        try:
-            self.send(nsq.cls())
-        except Exception, e:
-            self.trigger('error', conn=self,
-                         error=nsq.SendError('failed to send CLS'))
-            return False
-        return True
         
     def close(self):
         self.stream.close()
@@ -285,6 +276,16 @@ class AsyncConn(EventedMixin):
         self.rdy = value
         return True
 
+    def send_cls(self):
+        try:
+            self.send(nsq.cls())
+        except Exception, e:
+            self.close()
+            self.trigger('error', conn=self,
+                         error=nsq.SendError('failed to send CLS'))
+            return False
+        return True
+    
     def _on_connect(self, **kwargs):
         identify_data = {
             'short_id': self.short_hostname,
