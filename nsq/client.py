@@ -88,7 +88,7 @@ class Client(object):
             try:
                 conn.send_cls()
             except Exception, e:
-                logger.warning('[%s:%s] error sending CLS, closing'
+                logger.warning('[%s:%s] error sending CLS, closing',
                                conn.id, self.name)
             conn.close()
     
