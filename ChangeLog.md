@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.5 - 2014-11-11
+
+ * #100 - add `Reader.close()`
+ * #99 - don't redistribute `RDY` when there aren't any connections
+ * #98 - send `RDY` before `FIN`/`REQ` (for bitly/nsq#404)
+ * #96 - fix exception when `Writer` has no connection
+
 ## 0.6.4 - 2014-08-11
 
  * #91 - change order of max attempts check
