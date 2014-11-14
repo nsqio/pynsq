@@ -1,9 +1,11 @@
+from __future__ import absolute_import
+
 import time
 import socket
 import struct
 import logging
 
-from version import __version__
+from .version import __version__
 
 try:
     import ssl
@@ -11,7 +13,7 @@ except ImportError:
     ssl = None  # pyflakes.ignore
 
 try:
-    from snappy_socket import SnappySocket
+    from .snappy_socket import SnappySocket
 except ImportError:
     SnappySocket = None  # pyflakes.ignore
 
@@ -24,9 +26,10 @@ import tornado.iostream
 import tornado.ioloop
 import tornado.simple_httpclient
 
-import nsq
-from evented_mixin import EventedMixin
-from deflate_socket import DeflateSocket
+from . import nsq
+import six
+from .evented_mixin import EventedMixin
+from .deflate_socket import DeflateSocket
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +104,7 @@ class AsyncConn(EventedMixin):
                  deflate_level=6, user_agent=None, output_buffer_size=16 * 1024,
                  output_buffer_timeout=250, sample_rate=0, io_loop=None,
                  auth_secret=None):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, six.string_types + (six.text_type,))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
         assert isinstance(tls_options, (dict, None.__class__))
@@ -111,7 +114,8 @@ class AsyncConn(EventedMixin):
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
-        assert isinstance(auth_secret, (str, unicode, None.__class__))
+        assert isinstance(auth_secret, six.string_types + (six.text_type,
+                                                           type(None)))
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
 
@@ -267,7 +271,7 @@ class AsyncConn(EventedMixin):
     def send_rdy(self, value):
         try:
             self.send(nsq.ready(value))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger('error', conn=self,
                          error=nsq.SendError('failed to send RDY %d' % value, e))
@@ -295,7 +299,7 @@ class AsyncConn(EventedMixin):
         self.on('response', self._on_identify_response)
         try:
             self.send(nsq.identify(identify_data))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger('error', conn=self,
                          error=nsq.SendError('failed to bootstrap connection', e))
@@ -349,7 +353,7 @@ class AsyncConn(EventedMixin):
             self.trigger('auth', conn=self, data=self.auth_secret)
             try:
                 self.send(nsq.auth(self.auth_secret))
-            except Exception, e:
+            except Exception as e:
                 self.close()
                 self.trigger('error', conn=self, error=nsq.SendError('Error sending AUTH', e))
             return
@@ -382,7 +386,7 @@ class AsyncConn(EventedMixin):
             message.on('touch', self._on_message_touch)
 
             self.trigger('message', conn=self, message=message)
-        elif frame == nsq.FRAME_TYPE_RESPONSE and data == '_heartbeat_':
+        elif frame == nsq.FRAME_TYPE_RESPONSE and data == six.b('_heartbeat_'):
             self.send(nsq.nop())
             self.trigger('heartbeat', conn=self)
         elif frame == nsq.FRAME_TYPE_RESPONSE:
@@ -400,7 +404,7 @@ class AsyncConn(EventedMixin):
         try:
             time_ms = self.requeue_delay * message.attempts * 1000 if time_ms < 0 else time_ms
             self.send(nsq.requeue(message.id, time_ms))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger('error', conn=self, error=nsq.SendError(
                 'failed to send REQ %s @ %d' % (message.id, time_ms), e))
@@ -411,7 +415,7 @@ class AsyncConn(EventedMixin):
         self.in_flight -= 1
         try:
             self.send(nsq.finish(message.id))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger('error', conn=self,
                          error=nsq.SendError('failed to send FIN %s' % message.id, e))
@@ -419,7 +423,7 @@ class AsyncConn(EventedMixin):
     def _on_message_touch(self, message, **kwargs):
         try:
             self.send(nsq.touch(message.id))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger('error', conn=self,
                          error=nsq.SendError('failed to send TOUCH %s' % message.id, e))

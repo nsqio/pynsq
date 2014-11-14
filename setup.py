@@ -29,10 +29,10 @@ setup(
     url='http://github.com/bitly/pynsq',
     download_url='https://s3.amazonaws.com/bitly-downloads/nsq/pynsq-%s.tar.gz' % version,
     packages=['nsq'],
-    requires=['tornado'],
+    requires=['tornado', 'six'],
     include_package_data=True,
     zip_safe=False,
-    tests_require=['pytest', 'mock', 'tornado'],
+    tests_require=['pytest', 'mock', 'tornado', 'six'],
     cmdclass={'test': PyTest},
     classifiers=[
         'License :: OSI Approved :: MIT License'

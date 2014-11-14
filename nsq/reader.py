@@ -3,7 +3,7 @@ import time
 import functools
 import urllib
 import random
-import urlparse
+from six.moves.urllib import parse as urlparse
 import cgi
 
 try:
@@ -14,11 +14,12 @@ except ImportError:
 import tornado.ioloop
 import tornado.httpclient
 
-from backoff_timer import BackoffTimer
-from client import Client
-import nsq
-import async
+from .backoff_timer import BackoffTimer
+from .client import Client
+from . import nsq
+from . import async
 import inspect
+import six
 
 logger = logging.getLogger(__name__)
 
@@ -138,11 +139,11 @@ class Reader(Client):
                  **kwargs):
         super(Reader, self).__init__(**kwargs)
 
-        assert isinstance(topic, (str, unicode)) and len(topic) > 0
-        assert isinstance(channel, (str, unicode)) and len(channel) > 0
+        assert isinstance(topic, six.string_types) and len(topic) > 0
+        assert isinstance(channel, six.string_types) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
         assert isinstance(max_backoff_duration, (int, float)) and max_backoff_duration > 0
-        assert isinstance(name, (str, unicode, None.__class__))
+        assert isinstance(name, six.string_types + (None.__class__,))
         assert isinstance(lookupd_poll_interval, int)
         assert isinstance(lookupd_poll_jitter, float)
         assert isinstance(lookupd_connect_timeout, int)
@@ -152,14 +153,15 @@ class Reader(Client):
 
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
-                assert isinstance(nsqd_tcp_addresses, (str, unicode))
+                assert isinstance(nsqd_tcp_addresses, six.string_types)
                 nsqd_tcp_addresses = [nsqd_tcp_addresses]
         else:
             nsqd_tcp_addresses = []
 
         if lookupd_http_addresses:
             if not isinstance(lookupd_http_addresses, (list, set, tuple)):
-                assert isinstance(lookupd_http_addresses, (str, unicode))
+                assert isinstance(lookupd_http_addresses,
+                                  six.string_types)
                 lookupd_http_addresses = [lookupd_http_addresses]
             random.shuffle(lookupd_http_addresses)
         else:
@@ -256,7 +258,7 @@ class Reader(Client):
         self.message_handler = message_handler
 
     def _connection_max_in_flight(self):
-        return max(1, self.max_in_flight / max(1, len(self.conns)))
+        return max(1, self.max_in_flight // max(1, len(self.conns)))
 
     def is_starved(self):
         """
@@ -279,7 +281,7 @@ class Reader(Client):
             reader.set_message_handler(functools.partial(message_handler, reader=reader))
             nsq.run()
         """
-        for conn in self.conns.itervalues():
+        for conn in six.itervalues(self.conns):
             if conn.in_flight > 0 and conn.in_flight >= (conn.last_rdy * 0.85):
                 return True
         return False
@@ -298,7 +300,7 @@ class Reader(Client):
             # if all connections aren't getting RDY
             # occsionally randomize which connection gets RDY
             self.random_rdy_ts = time.time()
-            conns_with_no_rdy = [c for c in self.conns.itervalues() if not c.rdy]
+            conns_with_no_rdy = [c for c in six.itervalues(self.conns) if not c.rdy]
             if conns_with_no_rdy:
                 rdy_conn = random.choice(conns_with_no_rdy)
                 if rdy_conn is not conn:
@@ -350,7 +352,7 @@ class Reader(Client):
         if not self.conns:
             return
 
-        conn = random.choice(self.conns.values())
+        conn = random.choice(list(self.conns.values()))
         logger.info('[%s:%s] testing backoff state with RDY 1', conn.id, self.name)
         self._send_rdy(conn, 1)
 
@@ -368,8 +370,8 @@ class Reader(Client):
     def _complete_backoff_block(self):
         self.backoff_block_completed = True
         rdy = self._connection_max_in_flight()
-        logger.info('[%s] backoff complete, resuming normal operation (%d connections)',
-                    self.name, len(self.conns))
+        logger.info('[%s] backoff complete, resuming normal operation (%d connections)', self.name, len(self.conns))
+
         for c in self.conns.values():
             self._send_rdy(c, rdy)
 
@@ -401,7 +403,7 @@ class Reader(Client):
         backoff_interval = self.backoff_timer.get_interval()
 
         logger.info('[%s] backing off for %0.2f seconds (%d connections)',
-                    self.name, backoff_interval, len(self.conns))
+            self.name, backoff_interval, len(self.conns))
         for c in self.conns.values():
             self._send_rdy(c, 0)
 
@@ -444,7 +446,7 @@ class Reader(Client):
         :param host: the address to connect to
         :param port: the port to connect to
         """
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, six.string_types)
         assert isinstance(port, int)
 
         conn = async.AsyncConn(host, port, **self.conn_kwargs)
@@ -482,7 +484,7 @@ class Reader(Client):
         # re-check to make sure another connection didn't beat this one done
         if conn.id in self.conns:
             logger.warning(
-                '[%s:%s] connected to NSQ but anothermatching connection already exists',
+                '[%s:%s] connected to NSQ but another matching connection already exists',
                 conn.id, self.name)
             conn.close()
             return
@@ -618,7 +620,7 @@ class Reader(Client):
 
             # first set RDY 0 to all connections that have not received a message within
             # a configurable timeframe (low_rdy_idle_timeout).
-            for conn_id, conn in self.conns.iteritems():
+            for conn_id, conn in six.iteritems(self.conns):
                 last_message_duration = time.time() - conn.last_msg_timestamp
                 logger.debug('[%s:%s] rdy: %d (last message received %.02fs)',
                              conn.id, self.name, conn.rdy, last_message_duration)
@@ -638,7 +640,7 @@ class Reader(Client):
             # We also don't attempt to avoid the connections who previously might have had RDY 1
             # because it would be overly complicated and not actually worth it (ie. given enough
             # redistribution rounds it doesn't matter).
-            possible_conns = self.conns.values()
+            possible_conns = list(self.conns.values())
             while possible_conns and max_in_flight:
                 max_in_flight -= 1
                 conn = possible_conns.pop(random.randrange(len(possible_conns)))
@@ -697,7 +699,7 @@ def _utf8_params(params):
     for k, v in params.items():
         if v is None:
             continue
-        if isinstance(v, (int, long, float)):
+        if isinstance(v, six.integer_types + (float,)):
             v = str(v)
         if isinstance(v, (list, tuple)):
             v = [_utf8(x) for x in v]
@@ -709,7 +711,7 @@ def _utf8_params(params):
 
 def _utf8(s):
     """encode a unicode string as utf-8"""
-    if isinstance(s, unicode):
+    if isinstance(s, six.text_type):
         return s.encode("utf-8")
-    assert isinstance(s, str), "_utf8 expected a str, not %r" % type(s)
+    assert isinstance(s, six.binary_type), "_utf8 expected a str, not %r" % type(s)
     return s

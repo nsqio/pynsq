@@ -14,6 +14,7 @@ if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
 import nsq
+import six
 
 
 class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
@@ -41,7 +42,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         while True:
             try:
                 resp = http.fetch('http://127.0.0.1:4151/ping')
-                if resp.body == 'OK':
+                if resp.body == six.b('OK'):
                     break
                 continue
             except:
@@ -57,7 +58,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
             proc.wait()
 
     def test_bad_reader_arguments(self):
-        topic = 'test_reader_msgs_%s' % time.time()
+        topic = 'test_reader_msgs_{0:.2f}'.format(time.time())
         bad_options = dict(self.identify_options)
         bad_options.update(dict(foo=10))
         handler = lambda x: None
@@ -75,7 +76,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
 
@@ -85,7 +86,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['snappy'] is True
@@ -101,7 +102,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         assert isinstance(c.socket._socket, ssl.SSLSocket)
 
     def test_conn_subscribe(self):
-        topic = 'test_conn_suscribe_%s' % time.time()
+        topic = 'test_conn_suscribe_{0:.2f}'.format(time.time())
         c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                                 **self.identify_options)
 
@@ -112,9 +113,9 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('ready', _on_ready)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
-        assert response['data'] == 'OK'
+        assert response['data'] == six.b('OK')
 
     def _send_messages(self, topic, count, body):
         c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
@@ -129,8 +130,8 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
     def test_conn_messages(self):
         self.msg_count = 0
 
-        topic = 'test_conn_suscribe_%s' % time.time()
-        self._send_messages(topic, 5, 'sup')
+        topic = 'test_msgs_{0:.3f}'.format(time.time())
+        self._send_messages(topic, 5, 'ch')
 
         c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                                 **self.identify_options)
@@ -155,11 +156,11 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         self.msg_count = 0
         num_messages = 500
 
-        topic = 'test_reader_msgs_%s' % time.time()
+        topic = 'test_reader_msgs_{0:.2f}'.format(time.time())
         self._send_messages(topic, num_messages, 'sup')
 
         def handler(msg):
-            assert msg.body == 'sup'
+            assert msg.body == six.b('sup')
             self.msg_count += 1
             if self.msg_count >= num_messages:
                 self.stop()
@@ -169,7 +170,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                    io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
                    **self.identify_options)
 
-        self.wait()
+        self.wait(timeout=10000)
 
     def test_reader_heartbeat(self):
         this = self
@@ -184,10 +185,13 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                 if this.count == 2:
                     this.stop()
 
-        topic = 'test_reader_hb_%s' % time.time()
-        HeartbeatReader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
-                        io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
-                        heartbeat_interval=1)
+        topic = 'test_reader_hb_{0:.2f}'.format(time.time())
+        #options = self.identify_options
+        #options.update(dict(heartbeat_interval=1))
+        options = dict(heartbeat_interval=1)
+        reader = HeartbeatReader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                                 io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+                                 **options)
         self.wait()
 
 
@@ -214,7 +218,7 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['deflate'] is True

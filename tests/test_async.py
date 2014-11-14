@@ -1,9 +1,15 @@
 from __future__ import with_statement
 import os
+import six
 import sys
 
 import struct
-from mock import patch, create_autospec, MagicMock
+
+if six.PY2:
+    from mock import patch, create_autospec, MagicMock
+else:
+    from unittest.mock import patch, create_autospec, MagicMock
+
 from tornado.iostream import IOStream
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
