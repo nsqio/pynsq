@@ -312,7 +312,7 @@ class AsyncConn(EventedMixin):
             return self.trigger('ready', conn=self)
 
         try:
-            data = json.loads(data)
+            data = json.loads(data.decode('utf8'))
         except ValueError:
             self.close()
             err = 'failed to parse IDENTIFY response JSON from nsqd - %r' % data

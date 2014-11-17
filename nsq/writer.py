@@ -109,14 +109,14 @@ class Writer(Client):
         self.connect()
 
     def pub(self, topic, msg, callback=None):
-        self._pub(six.b('pub'), topic, msg, callback)
+        self._pub('pub', topic, msg, callback)
 
     def mpub(self, topic, msg, callback=None):
         if isinstance(msg, six.string_types + (six.text_type,)):
             msg = [msg]
         assert isinstance(msg, (list, set, tuple))
 
-        self._pub(six.b('mpub'), topic, msg, callback)
+        self._pub('mpub', topic, msg, callback)
 
     def _pub(self, command, topic, msg, callback):
         if not callback:

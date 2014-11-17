@@ -1,7 +1,6 @@
 import logging
 import time
 import functools
-import urllib
 import random
 from six.moves.urllib import parse as urlparse
 import cgi
@@ -553,7 +552,7 @@ class Reader(Client):
 
         params = cgi.parse_qs(query)
         params['topic'] = self.topic
-        query = urllib.urlencode(_utf8_params(params), doseq=1)
+        query = urlparse.urlencode(_utf8_params(params), doseq=1)
         lookupd_url = urlparse.urlunsplit((scheme, netloc, path, query, fragment))
 
         req = tornado.httpclient.HTTPRequest(
@@ -570,7 +569,7 @@ class Reader(Client):
             return
 
         try:
-            lookup_data = json.loads(response.body)
+            lookup_data = json.loads(response.body.decode('utf8'))
         except ValueError:
             logger.warning('[%s] lookupd %s failed to parse JSON: %r',
                            self.name, lookupd_url, response.body)
