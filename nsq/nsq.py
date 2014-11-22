@@ -115,17 +115,17 @@ def mpub(topic, data):
     return _command('MPUB', body, topic)
 
 
-def valid_topic_name(topic):
-    if not 0 < len(topic) < 65:
+def _is_valid_name(name):
+    if not 0 < len(name) < 65:
         return False
-    if re.match(r'^[\.a-zA-Z0-9_-]+$', topic):
+    if re.match(r'^[\.a-zA-Z0-9_-]+(#ephemeral)?$', name):
         return True
     return False
+
+
+def valid_topic_name(topic):
+    return _is_valid_name(topic)
 
 
 def valid_channel_name(channel):
-    if not 0 < len(channel) < 65:
-        return False
-    if re.match(r'^[\.a-zA-Z0-9_-]+(#ephemeral)?$', channel):
-        return True
-    return False
+    return _is_valid_name(channel)
