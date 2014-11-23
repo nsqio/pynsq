@@ -419,6 +419,7 @@ class AsyncConn(EventedMixin):
     def _on_message_touch(self, message, **kwargs):
         try:
             self.send(nsq.touch(message.id))
+            self.last_recv_timestamp = time.time()
         except Exception, e:
             self.close()
             self.trigger('error', conn=self,
