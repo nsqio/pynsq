@@ -1,16 +1,19 @@
+from __future__ import absolute_import
+
 import socket
 import struct
 
-import nsq
+from . import nsq
+import six
 
 
 class SyncConn(object):
     def __init__(self, timeout=1.0):
-        self.buffer = ''
+        self.buffer = six.b('')
         self.timeout = timeout
 
     def connect(self, host, port):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, six.string_types + (six.text_type,))
         assert isinstance(port, int)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.settimeout(self.timeout)
