@@ -27,7 +27,10 @@ setup(
     author='Matt Reiferson',
     author_email='snakes@gmail.com',
     url='http://github.com/bitly/pynsq',
-    download_url='https://s3.amazonaws.com/bitly-downloads/nsq/pynsq-%s.tar.gz' % version,
+    download_url=(
+        'https://s3.amazonaws.com/bitly-downloads/nsq/pynsq-%s.tar.gz' %
+        version
+    ),
     packages=['nsq'],
     requires=['tornado'],
     include_package_data=True,
@@ -35,6 +38,11 @@ setup(
     tests_require=['pytest', 'mock', 'tornado'],
     cmdclass={'test': PyTest},
     classifiers=[
-        'License :: OSI Approved :: MIT License'
+        'Development Status :: 4 - Beta',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: Implementation :: CPython',
     ]
 )
