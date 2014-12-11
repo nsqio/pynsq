@@ -26,13 +26,13 @@ setup(
     keywords='python nsq',
     author='Matt Reiferson',
     author_email='snakes@gmail.com',
-    url='http://github.com/bitly/pynsq',
+    url='https://github.com/bitly/pynsq',
     download_url=(
         'https://s3.amazonaws.com/bitly-downloads/nsq/pynsq-%s.tar.gz' %
         version
     ),
     packages=['nsq'],
-    requires=['tornado'],
+    install_requires=['tornado'],
     include_package_data=True,
     zip_safe=False,
     tests_require=['pytest', 'mock', 'tornado'],
