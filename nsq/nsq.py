@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import struct
 import re
 
@@ -6,7 +8,7 @@ try:
 except ImportError:
     import json  # pyflakes.ignore
 
-from message import Message
+from .message import Message
 
 
 MAGIC_V2 = '  V2'

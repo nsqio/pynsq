@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from decimal import Decimal
 import os
 import sys
@@ -7,8 +9,7 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-from nsq import BackoffTimer
-import nsq
+from nsq import BackoffTimer, nsq
 
 
 def pytest_generate_tests(metafunc):

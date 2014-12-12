@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+
 import logging
 import time
 import functools
 import random
-
-from client import Client
-import nsq
-import async
 import inspect
+
+from .client import Client
+from . import nsq
+from . import async
 
 logger = logging.getLogger(__name__)
 
