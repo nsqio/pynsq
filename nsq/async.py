@@ -1,9 +1,11 @@
+from __future__ import absolute_import
+
 import time
 import socket
 import struct
 import logging
 
-from version import __version__
+from .version import __version__
 
 try:
     import ssl
@@ -11,7 +13,7 @@ except ImportError:
     ssl = None  # pyflakes.ignore
 
 try:
-    from snappy_socket import SnappySocket
+    from .snappy_socket import SnappySocket
 except ImportError:
     SnappySocket = None  # pyflakes.ignore
 
@@ -24,9 +26,9 @@ import tornado.iostream
 import tornado.ioloop
 import tornado.simple_httpclient
 
-import nsq
-from evented_mixin import EventedMixin
-from deflate_socket import DeflateSocket
+from . import nsq
+from .evented_mixin import EventedMixin
+from .deflate_socket import DeflateSocket
 
 logger = logging.getLogger(__name__)
 

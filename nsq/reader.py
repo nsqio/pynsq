@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import logging
 import time
 import functools
@@ -5,6 +7,7 @@ import urllib
 import random
 import urlparse
 import cgi
+import inspect
 
 try:
     import simplejson as json
@@ -14,11 +17,10 @@ except ImportError:
 import tornado.ioloop
 import tornado.httpclient
 
-from backoff_timer import BackoffTimer
-from client import Client
-import nsq
-import async
-import inspect
+from .backoff_timer import BackoffTimer
+from .client import Client
+from . import nsq
+from . import async
 
 logger = logging.getLogger(__name__)
 

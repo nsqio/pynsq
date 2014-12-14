@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import os
 import sys
 import signal
@@ -13,7 +15,11 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-import nsq
+from nsq import nsq
+from nsq.async import AsyncConn
+from nsq.deflate_socket import DeflateSocket
+from nsq.reader import Reader
+from nsq.snappy_socket import SnappySocket
 
 
 class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
@@ -64,14 +70,14 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
 
         self.assertRaises(
             AssertionError,
-            nsq.Reader,
+            Reader,
             nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic,
             channel='ch', io_loop=self.io_loop,
             message_handler=handler, max_in_flight=100,
             **bad_options)
 
     def test_conn_identify(self):
-        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
@@ -80,7 +86,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         assert isinstance(response['data'], dict)
 
     def test_conn_identify_options(self):
-        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                                 **self.identify_options)
         c.on('identify_response', self.stop)
         c.connect()
@@ -92,17 +98,17 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         assert response['data']['tls_v1'] is True
 
     def test_conn_socket_upgrade(self):
-        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                                 **self.identify_options)
         c.on('ready', self.stop)
         c.connect()
         self.wait()
-        assert isinstance(c.socket, nsq.snappy_socket.SnappySocket)
+        assert isinstance(c.socket, SnappySocket)
         assert isinstance(c.socket._socket, ssl.SSLSocket)
 
     def test_conn_subscribe(self):
         topic = 'test_conn_suscribe_%s' % time.time()
-        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                                 **self.identify_options)
 
         def _on_ready(*args, **kwargs):
@@ -117,7 +123,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         assert response['data'] == 'OK'
 
     def _send_messages(self, topic, count, body):
-        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
         c.connect()
 
         def _on_ready(*args, **kwargs):
@@ -132,7 +138,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         topic = 'test_conn_suscribe_%s' % time.time()
         self._send_messages(topic, 5, 'sup')
 
-        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                                 **self.identify_options)
 
         def _on_message(*args, **kwargs):
@@ -165,7 +171,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                 self.stop()
             return True
 
-        nsq.Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+        Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
                    io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
                    **self.identify_options)
 
@@ -178,7 +184,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         def handler(msg):
             return True
 
-        class HeartbeatReader(nsq.Reader):
+        class HeartbeatReader(Reader):
             def heartbeat(self, conn):
                 this.count += 1
                 if this.count == 2:
@@ -209,7 +215,7 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
                     '--tls-cert=%s/tests/cert.pem' % base_dir]
 
     def test_conn_identify_options(self):
-        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                                 **self.identify_options)
         c.on('identify_response', self.stop)
         c.connect()
@@ -221,10 +227,10 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
         assert response['data']['tls_v1'] is True
 
     def test_conn_socket_upgrade(self):
-        c = nsq.async.AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                                 **self.identify_options)
         c.on('ready', self.stop)
         c.connect()
         self.wait()
-        assert isinstance(c.socket, nsq.deflate_socket.DeflateSocket)
+        assert isinstance(c.socket, DeflateSocket)
         assert isinstance(c.socket._socket, ssl.SSLSocket)

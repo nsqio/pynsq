@@ -1,7 +1,9 @@
+from __future__ import absolute_import
+
 import socket
 import struct
 
-import nsq
+from . import nsq
 
 
 class SyncConn(object):

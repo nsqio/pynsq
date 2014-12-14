@@ -1,16 +1,11 @@
+from __future__ import absolute_import
+
 import struct
 import time
-import os
-import sys
 
-# shunt '..' into sys.path since we are in a 'tests' subdirectory
-base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-if base_dir not in sys.path:
-    sys.path.insert(0, base_dir)
-
-import mock_socket
-import nsq
-nsq.sync.socket = mock_socket
+from . import mock_socket
+from nsq import nsq, sync
+sync.socket = mock_socket
 
 
 def mock_write(c, data):
@@ -32,7 +27,7 @@ def mock_response_write_message(c, timestamp, attempts, id, body):
 
 
 def test_sync_authenticate_subscribe():
-    c = nsq.SyncConn()
+    c = sync.SyncConn()
     c.connect("127.0.0.1", 4150)
 
     c.send(nsq.identify({'short_id': 'test', 'long_id': 'test.example'}))
@@ -53,7 +48,7 @@ def test_sync_authenticate_subscribe():
 
 
 def test_sync_receive_messages():
-    c = nsq.SyncConn()
+    c = sync.SyncConn()
     c.connect("127.0.0.1", 4150)
 
     c.send(nsq.identify({'short_id': 'test', 'long_id': 'test.example'}))

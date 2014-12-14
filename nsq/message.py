@@ -1,4 +1,6 @@
-from evented_mixin import EventedMixin
+from __future__ import absolute_import
+
+from .evented_mixin import EventedMixin
 
 
 class Message(EventedMixin):
