@@ -14,9 +14,23 @@ from .message import Message
 MAGIC_V2 = '  V2'
 NL = '\n'
 
+
 FRAME_TYPE_RESPONSE = 0
 FRAME_TYPE_ERROR = 1
 FRAME_TYPE_MESSAGE = 2
+
+
+# commmands
+AUTH = 'AUTH'
+FIN = 'FIN'  # success
+IDENTIFY = 'IDENTIFY'
+MPUB = 'MPUB'
+NOP = 'NOP'
+PUB = 'PUB'  # publish
+RDY = 'RDY'
+REQ = 'REQ'  # requeue
+SUB = 'SUB'
+TOUCH = 'TOUCH'
 
 
 class Error(Exception):
@@ -71,42 +85,42 @@ def _command(cmd, body, *params):
 def subscribe(topic, channel):
     assert valid_topic_name(topic)
     assert valid_channel_name(channel)
-    return _command('SUB', None, topic, channel)
+    return _command(SUB, None, topic, channel)
 
 
 def identify(data):
-    return _command('IDENTIFY', json.dumps(data))
+    return _command(IDENTIFY, json.dumps(data))
 
 
 def auth(data):
-    return _command('AUTH', data)
+    return _command(AUTH, data)
 
 
 def ready(count):
     assert isinstance(count, int), 'ready count must be an integer'
     assert count >= 0, 'ready count cannot be negative'
-    return _command('RDY', None, str(count))
+    return _command(RDY, None, str(count))
 
 
 def finish(id):
-    return _command('FIN', None, id)
+    return _command(FIN, None, id)
 
 
 def requeue(id, time_ms=0):
     assert isinstance(time_ms, int), 'requeue time_ms must be an integer'
-    return _command('REQ', None, id, str(time_ms))
+    return _command(REQ, None, id, str(time_ms))
 
 
 def touch(id):
-    return _command('TOUCH', None, id)
+    return _command(TOUCH, None, id)
 
 
 def nop():
-    return _command('NOP', None)
+    return _command(NOP, None)
 
 
 def pub(topic, data):
-    return _command('PUB', data, topic)
+    return _command(PUB, data, topic)
 
 
 def mpub(topic, data):
@@ -114,7 +128,7 @@ def mpub(topic, data):
     body = struct.pack('>l', len(data))
     for m in data:
         body += struct.pack('>l', len(m)) + m
-    return _command('MPUB', body, topic)
+    return _command(MPUB, body, topic)
 
 
 def _is_valid_name(name):

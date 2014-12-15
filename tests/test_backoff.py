@@ -15,6 +15,7 @@ if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
 import nsq
+from nsq import event
 
 
 _conn_port = 4150
@@ -37,13 +38,13 @@ def _get_conn(reader):
     with patch('nsq.async.tornado.iostream.IOStream', autospec=True):
         conn = reader.connect_to_nsqd('localhost', _conn_port)
     _conn_port += 1
-    conn.trigger('ready', conn=conn)
+    conn.trigger(event.READY, conn=conn)
     return conn
 
 
 def _send_message(conn):
     msg = _get_message(conn)
-    conn.trigger('message', conn=conn, message=msg)
+    conn.trigger(event.MESSAGE, conn=conn, message=msg)
     return msg
 
 
@@ -61,13 +62,13 @@ def test_backoff_easy():
 
     msg = _send_message(conn)
 
-    msg.trigger('finish', message=msg)
+    msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
     msg = _send_message(conn)
 
-    msg.trigger('requeue', message=msg)
+    msg.trigger(event.REQUEUE, message=msg)
     assert r.backoff_block is True
     assert r.backoff_timer.get_interval() > 0
     assert mock_ioloop.add_timeout.called
@@ -80,7 +81,7 @@ def test_backoff_easy():
 
     msg = _send_message(conn)
 
-    msg.trigger('finish', message=msg)
+    msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
@@ -106,13 +107,13 @@ def test_backoff_out_of_order():
 
     msg = _send_message(conn1)
 
-    msg.trigger('finish', message=msg)
+    msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
     msg = _send_message(conn1)
 
-    msg.trigger('requeue', message=msg)
+    msg.trigger(event.REQUEUE, message=msg)
     assert r.backoff_block is True
     assert r.backoff_timer.get_interval() > 0
     assert mock_ioloop.add_timeout.called
@@ -120,7 +121,7 @@ def test_backoff_out_of_order():
 
     msg = _send_message(conn1)
 
-    msg.trigger('finish', message=msg)
+    msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is True
     assert r.backoff_timer.get_interval() == 0
 
@@ -155,7 +156,7 @@ def test_backoff_requeue_recovery():
     conn = _get_conn(r)
     msg = _send_message(conn)
 
-    msg.trigger('finish', message=msg)
+    msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
     assert mock_ioloop.add_timeout.call_count == 1
@@ -163,7 +164,7 @@ def test_backoff_requeue_recovery():
     msg = _send_message(conn)
 
     # go into backoff
-    msg.trigger('requeue', message=msg)
+    msg.trigger(event.REQUEUE, message=msg)
     assert r.backoff_block is True
     assert r.backoff_timer.get_interval() > 0
     assert mock_ioloop.add_timeout.call_count == 2
@@ -177,7 +178,7 @@ def test_backoff_requeue_recovery():
     msg = _send_message(conn)
 
     # This should not move out of backoff (since backoff=False)
-    msg.trigger('requeue', message=msg, backoff=False)
+    msg.trigger(event.REQUEUE, message=msg, backoff=False)
     assert r.backoff_block is True
     assert r.backoff_timer.get_interval() != 0
     assert mock_ioloop.add_timeout.call_count == 3
@@ -190,7 +191,7 @@ def test_backoff_requeue_recovery():
 
     # this should move out of backoff state
     msg = _send_message(conn)
-    msg.trigger('finish', message=msg)
+    msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
@@ -227,13 +228,13 @@ def test_backoff_hard():
         msg = _send_message(conn)
 
         if fail:
-            msg.trigger('requeue', message=msg)
+            msg.trigger(event.REQUEUE, message=msg)
             num_fails += 1
 
             expected_args.append('RDY 0\n')
             expected_args.append('REQ 1234 0\n')
         else:
-            msg.trigger('finish', message=msg)
+            msg.trigger(event.FINISH, message=msg)
             num_fails -= 1
 
             expected_args.append('RDY 0\n')
@@ -257,7 +258,7 @@ def test_backoff_hard():
     for i in range(num_fails - 1):
         msg = _send_message(conn)
 
-        msg.trigger('finish', message=msg)
+        msg.trigger(event.FINISH, message=msg)
         expected_args.append('RDY 0\n')
         expected_args.append('FIN 1234\n')
         timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
@@ -268,7 +269,7 @@ def test_backoff_hard():
 
     msg = _send_message(conn)
 
-    msg.trigger('finish', message=msg)
+    msg.trigger(event.FINISH, message=msg)
     expected_args.append('RDY 5\n')
     expected_args.append('FIN 1234\n')
 
@@ -303,7 +304,7 @@ def test_backoff_many_conns():
             conn.expected_args.append('RDY 1\n')
 
         if fail or not conn.fails:
-            msg.trigger('requeue', message=msg)
+            msg.trigger(event.REQUEUE, message=msg)
             total_fails += 1
             conn.fails += 1
 
@@ -311,7 +312,7 @@ def test_backoff_many_conns():
                 c.expected_args.append('RDY 0\n')
             conn.expected_args.append('REQ 1234 0\n')
         else:
-            msg.trigger('finish', message=msg)
+            msg.trigger(event.FINISH, message=msg)
             total_fails -= 1
             conn.fails -= 1
 
@@ -349,7 +350,7 @@ def test_backoff_many_conns():
 
         msg = _send_message(conn)
 
-        msg.trigger('finish', message=msg)
+        msg.trigger(event.FINISH, message=msg)
         total_fails -= 1
         conn.fails -= 1
 
@@ -398,7 +399,7 @@ def test_backoff_conns_disconnect():
     for i in range(50):
         if i % 5 == 0:
             if len(r.conns) == num_conns:
-                conn.trigger('close', conn=conn)
+                conn.trigger(event.CLOSE, conn=conn)
                 conns.remove(conn)
                 if conn.rdy and r.backoff_timer.get_interval():
                     assert r.need_rdy_redistributed
@@ -420,7 +421,7 @@ def test_backoff_conns_disconnect():
             conn.expected_args.append('RDY 1\n')
 
         if fail or not conn.fails:
-            msg.trigger('requeue', message=msg)
+            msg.trigger(event.REQUEUE, message=msg)
             total_fails += 1
             conn.fails += 1
 
@@ -428,7 +429,7 @@ def test_backoff_conns_disconnect():
                 c.expected_args.append('RDY 0\n')
             conn.expected_args.append('REQ 1234 0\n')
         else:
-            msg.trigger('finish', message=msg)
+            msg.trigger(event.FINISH, message=msg)
             total_fails -= 1
             conn.fails -= 1
 
@@ -456,7 +457,7 @@ def test_backoff_conns_disconnect():
 
         msg = _send_message(conn)
 
-        msg.trigger('finish', message=msg)
+        msg.trigger(event.FINISH, message=msg)
         total_fails -= 1
         conn.fails -= 1
 

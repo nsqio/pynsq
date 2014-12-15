@@ -1,9 +1,9 @@
 from __future__ import absolute_import
 
-from .evented_mixin import EventedMixin
+from nsq import event
 
 
-class Message(EventedMixin):
+class Message(event.EventedMixin):
     """
     A class representing a message received from ``nsqd``.
 
@@ -86,7 +86,7 @@ class Message(EventedMixin):
         """
         assert not self._has_responded
         self._has_responded = True
-        self.trigger('finish', message=self)
+        self.trigger(event.FINISH, message=self)
 
     def requeue(self, **kwargs):
         """
@@ -102,11 +102,11 @@ class Message(EventedMixin):
         """
         assert not self._has_responded
         self._has_responded = True
-        self.trigger('requeue', message=self, **kwargs)
+        self.trigger(event.REQUEUE, message=self, **kwargs)
 
     def touch(self):
         """
         Respond to ``nsqd`` that you need more time to process the message.
         """
         assert not self._has_responded
-        self.trigger('touch', message=self)
+        self.trigger(event.TOUCH, message=self)
