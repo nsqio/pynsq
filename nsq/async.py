@@ -40,14 +40,19 @@ CONNECTING = 'CONNECTING'
 CONNECTED = 'CONNECTED'
 
 
+DEFAULT_USER_AGENT = 'pynsq/%s' % __version__
+
+
 class AsyncConn(event.EventedMixin):
     """
     Low level object representing a TCP connection to nsqd.
 
-    When a message on this connection is requeued and the requeue delay has not been specified,
-    it calculates the delay automatically by an increasing multiple of ``requeue_delay``.
+    When a message on this connection is requeued and the requeue delay
+    has not been specified, it calculates the delay automatically by an
+    increasing multiple of ``requeue_delay``.
 
-    Generates the following events that can be listened to with :meth:`nsq.AsyncConn.on`:
+    Generates the following events that can be listened to with
+    :meth:`nsq.AsyncConn.on`:
 
      * ``connect``
      * ``close``
@@ -69,8 +74,8 @@ class AsyncConn(event.EventedMixin):
 
     :param timeout: the timeout for read/write operations (in seconds)
 
-    :param heartbeat_interval: the amount of time in seconds to negotiate with the connected
-        producers to send heartbeats (requires nsqd 0.2.19+)
+    :param heartbeat_interval: the amount of time in seconds to negotiate
+        with the connected producers to send heartbeats (requires nsqd 0.2.19+)
 
     :param requeue_delay: the base multiple used when calculating requeue delay
         (multiplied by # of attempts)
@@ -78,38 +83,58 @@ class AsyncConn(event.EventedMixin):
     :param tls_v1: enable TLS v1 encryption (requires nsqd 0.2.22+)
 
     :param tls_options: dictionary of options to pass to `ssl.wrap_socket()
-        <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as ``**kwargs``
+        <http://docs.python.org/2/library/ssl.html#ssl.wrap_socket>`_ as
+        ``**kwargs``
 
     :param snappy: enable Snappy stream compression (requires nsqd 0.2.23+)
 
     :param deflate: enable deflate stream compression (requires nsqd 0.2.23+)
 
-    :param deflate_level: configure the deflate compression level for this connection
-        (requires nsqd 0.2.23+)
+    :param deflate_level: configure the deflate compression level for this
+        connection (requires nsqd 0.2.23+)
 
-    :param output_buffer_size: size of the buffer (in bytes) used by nsqd for buffering writes
-        to this connection
+    :param output_buffer_size: size of the buffer (in bytes) used by nsqd
+        for buffering writes to this connection
 
-    :param output_buffer_timeout: timeout (in ms) used by nsqd before flushing buffered writes
-        (set to 0 to disable).  **Warning**: configuring clients with an extremely low (``< 25ms``)
-        ``output_buffer_timeout`` has a significant effect on ``nsqd`` CPU usage (particularly
-        with ``> 50`` clients connected).
+    :param output_buffer_timeout: timeout (in ms) used by nsqd before
+        flushing buffered writes (set to 0 to disable).  **Warning**:
+        configuring clients with an extremely low (``< 25ms``)
+        ``output_buffer_timeout`` has a significant effect on ``nsqd``
+        CPU usage (particularly with ``> 50`` clients connected).
 
-    :param sample_rate: take only a sample of the messages being sent to the client. Not setting
-        this or setting it to 0 will ensure you get all the messages destined for the client.
-        Sample rate can be greater than 0 or less than 100 and the client will receive that
-        percentage of the message traffic. (requires nsqd 0.2.25+)
+    :param sample_rate: take only a sample of the messages being sent
+        to the client. Not setting this or setting it to 0 will ensure
+        you get all the messages destined for the client.
+        Sample rate can be greater than 0 or less than 100 and the client
+        will receive that percentage of the message traffic.
+        (requires nsqd 0.2.25+)
 
-    :param user_agent: a string identifying the agent for this client in the spirit of
-        HTTP (default: ``<client_library_name>/<version>``) (requires nsqd 0.2.25+)
+    :param user_agent: a string identifying the agent for this client
+        in the spirit of HTTP (default: ``<client_library_name>/<version>``)
+        (requires nsqd 0.2.25+)
 
-    :param auth_secret: a string passed when using nsq auth (requires nsqd 1.0+)
+    :param auth_secret: a string passed when using nsq auth
+        (requires nsqd 1.0+)
     """
-    def __init__(self, host, port, timeout=1.0, heartbeat_interval=30, requeue_delay=90,
-                 tls_v1=False, tls_options=None, snappy=False, deflate=False,
-                 deflate_level=6, user_agent=None, output_buffer_size=16 * 1024,
-                 output_buffer_timeout=250, sample_rate=0, io_loop=None,
-                 auth_secret=None):
+    def __init__(
+            self,
+            host,
+            port,
+            timeout=1.0,
+            heartbeat_interval=30,
+            requeue_delay=90,
+            tls_v1=False,
+            tls_options=None,
+            snappy=False,
+            deflate=False,
+            deflate_level=6,
+            user_agent=DEFAULT_USER_AGENT,
+            output_buffer_size=16 * 1024,
+            output_buffer_timeout=250,
+            sample_rate=0,
+            io_loop=None,
+            auth_secret=None
+        ):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -153,9 +178,6 @@ class AsyncConn(event.EventedMixin):
         self.output_buffer_timeout = output_buffer_timeout
         self.sample_rate = sample_rate
         self.user_agent = user_agent
-
-        if self.user_agent is None:
-            self.user_agent = 'pynsq/%s' % __version__
 
         self._authentication_required = False  # tracking server auth state
         self.auth_secret = auth_secret
