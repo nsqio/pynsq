@@ -27,13 +27,20 @@ import tornado.ioloop
 import tornado.simple_httpclient
 
 from . import nsq
-from .evented_mixin import EventedMixin
+from nsq import event
 from .deflate_socket import DeflateSocket
 
 logger = logging.getLogger(__name__)
 
 
-class AsyncConn(EventedMixin):
+# states
+INIT = 'INIT'
+DISCONNECTED = 'DISCONNECTED'
+CONNECTING = 'CONNECTING'
+CONNECTED = 'CONNECTED'
+
+
+class AsyncConn(event.EventedMixin):
     """
     Low level object representing a TCP connection to nsqd.
 
@@ -117,7 +124,7 @@ class AsyncConn(EventedMixin):
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
 
-        self.state = 'INIT'
+        self.state = INIT
         self.host = host
         self.port = port
         self.timeout = timeout
@@ -162,7 +169,7 @@ class AsyncConn(EventedMixin):
         return self.host + ':' + str(self.port)
 
     def connect(self):
-        if self.state not in ['INIT', 'DISCONNECTED']:
+        if self.state not in [INIT, DISCONNECTED]:
             return
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -172,24 +179,24 @@ class AsyncConn(EventedMixin):
         self.stream = tornado.iostream.IOStream(self.socket, io_loop=self.io_loop)
         self.stream.set_close_callback(self._socket_close)
 
-        self.state = 'CONNECTING'
-        self.on('connect', self._on_connect)
-        self.on('data', self._on_data)
+        self.state = CONNECTING
+        self.on(event.CONNECT, self._on_connect)
+        self.on(event.DATA, self._on_data)
 
         self.stream.connect((self.host, self.port), self._connect_callback)
 
     def _connect_callback(self):
-        self.state = 'CONNECTED'
+        self.state = CONNECTED
         self.stream.write(nsq.MAGIC_V2)
         self._start_read()
-        self.trigger('connect', conn=self)
+        self.trigger(event.CONNECT, conn=self)
 
     def _start_read(self):
         self.stream.read_bytes(4, self._read_size)
 
     def _socket_close(self):
-        self.state = 'DISCONNECTED'
-        self.trigger('close', conn=self)
+        self.state = DISCONNECTED
+        self.trigger(event.CONNECT, conn=self)
 
     def close(self):
         self.stream.close()
@@ -200,12 +207,15 @@ class AsyncConn(EventedMixin):
             self.stream.read_bytes(size, self._read_body)
         except Exception:
             self.close()
-            self.trigger('error', conn=self,
-                         error=nsq.IntegrityError('failed to unpack size'))
+            self.trigger(
+                event.ERROR,
+                conn=self,
+                error=nsq.IntegrityError('failed to unpack size'),
+            )
 
     def _read_body(self, data):
         try:
-            self.trigger('data', conn=self, data=data)
+            self.trigger(event.DATA, conn=self, data=data)
         except Exception:
             logger.exception('uncaught exception in data event')
         self.io_loop.add_callback(self._start_read)
@@ -271,8 +281,11 @@ class AsyncConn(EventedMixin):
             self.send(nsq.ready(value))
         except Exception, e:
             self.close()
-            self.trigger('error', conn=self,
-                         error=nsq.SendError('failed to send RDY %d' % value, e))
+            self.trigger(
+                event.ERROR,
+                conn=self,
+                error=nsq.SendError('failed to send RDY %d' % value, e),
+            )
             return False
         self.last_rdy = value
         self.rdy = value
@@ -293,31 +306,40 @@ class AsyncConn(EventedMixin):
             'sample_rate': self.sample_rate,
             'user_agent': self.user_agent
         }
-        self.trigger('identify', conn=self, data=identify_data)
-        self.on('response', self._on_identify_response)
+        self.trigger(event.IDENTIFY, conn=self, data=identify_data)
+        self.on(event.RESPONSE, self._on_identify_response)
         try:
             self.send(nsq.identify(identify_data))
         except Exception, e:
             self.close()
-            self.trigger('error', conn=self,
-                         error=nsq.SendError('failed to bootstrap connection', e))
+            self.trigger(
+                event.ERROR,
+                conn=self,
+                error=nsq.SendError('failed to bootstrap connection', e),
+            )
 
     def _on_identify_response(self, data, **kwargs):
-        self.off('response', self._on_identify_response)
+        self.off(event.RESPONSE, self._on_identify_response)
 
         if data == 'OK':
             logger.warning('nsqd version does not support feature netgotiation')
-            return self.trigger('ready', conn=self)
+            return self.trigger(event.READY, conn=self)
 
         try:
             data = json.loads(data)
         except ValueError:
             self.close()
-            err = 'failed to parse IDENTIFY response JSON from nsqd - %r' % data
-            self.trigger('error', conn=self, error=nsq.IntegrityError(err))
+            self.trigger(
+                event.ERROR,
+                conn=self,
+                error=nsq.IntegrityError(
+                    'failed to parse IDENTIFY response JSON from nsqd - %r' %
+                    data
+                ),
+            )
             return
 
-        self.trigger('identify_response', conn=self, data=data)
+        self.trigger(event.IDENTIFY_RESPONSE, conn=self, data=data)
 
         self._features_to_enable = []
         if self.tls_v1 and data.get('tls_v1'):
@@ -330,7 +352,7 @@ class AsyncConn(EventedMixin):
         if data.get('auth_required'):
             self._authentication_required = True
 
-        self.on('response', self._on_response_continue)
+        self.on(event.RESPONSE, self._on_response_continue)
         self._on_response_continue(conn=self, data=None)
 
     def _on_response_continue(self, data, **kwargs):
@@ -345,30 +367,39 @@ class AsyncConn(EventedMixin):
             # the server will 'OK' after these conneciton upgrades triggering another response
             return
 
-        self.off('response', self._on_response_continue)
+        self.off(event.RESPONSE, self._on_response_continue)
         if self.auth_secret and self._authentication_required:
-            self.on('response', self._on_auth_response)
-            self.trigger('auth', conn=self, data=self.auth_secret)
+            self.on(event.RESPONSE, self._on_auth_response)
+            self.trigger(event.AUTH, conn=self, data=self.auth_secret)
             try:
                 self.send(nsq.auth(self.auth_secret))
             except Exception, e:
                 self.close()
-                self.trigger('error', conn=self, error=nsq.SendError('Error sending AUTH', e))
+                self.trigger(
+                    event.ERROR,
+                    conn=self,
+                    error=nsq.SendError('Error sending AUTH', e),
+                )
             return
-        self.trigger('ready', conn=self)
+        self.trigger(event.READY, conn=self)
 
     def _on_auth_response(self, data, **kwargs):
         try:
             data = json.loads(data)
         except ValueError:
             self.close()
-            err = 'failed to parse AUTH response JSON from nsqd - %r' % data
-            self.trigger('error', conn=self, error=nsq.IntegrityError(err))
+            self.trigger(
+                event.ERROR,
+                conn=self,
+                error=nsq.IntegrityError(
+                    'failed to parse AUTH response JSON from nsqd - %r' % data
+                ),
+            )
             return
 
-        self.off('response', self._on_auth_response)
-        self.trigger('auth_response', conn=self, data=data)
-        return self.trigger('ready', conn=self)
+        self.off(event.RESPONSE, self._on_auth_response)
+        self.trigger(event.AUTH_RESPONSE, conn=self, data=data)
+        return self.trigger(event.READY, conn=self)
 
     def _on_data(self, data, **kwargs):
         self.last_recv_timestamp = time.time()
@@ -379,24 +410,24 @@ class AsyncConn(EventedMixin):
             self.in_flight += 1
 
             message = nsq.decode_message(data)
-            message.on('finish', self._on_message_finish)
-            message.on('requeue', self._on_message_requeue)
-            message.on('touch', self._on_message_touch)
+            message.on(event.FINISH, self._on_message_finish)
+            message.on(event.REQUEUE, self._on_message_requeue)
+            message.on(event.TOUCH, self._on_message_touch)
 
-            self.trigger('message', conn=self, message=message)
+            self.trigger(event.MESSAGE, conn=self, message=message)
         elif frame == nsq.FRAME_TYPE_RESPONSE and data == '_heartbeat_':
             self.send(nsq.nop())
-            self.trigger('heartbeat', conn=self)
+            self.trigger(event.HEARTBEAT, conn=self)
         elif frame == nsq.FRAME_TYPE_RESPONSE:
-            self.trigger('response', conn=self, data=data)
+            self.trigger(event.RESPONSE, conn=self, data=data)
         elif frame == nsq.FRAME_TYPE_ERROR:
-            self.trigger('error', conn=self, error=nsq.Error(data))
+            self.trigger(event.ERROR, conn=self, error=nsq.Error(data))
 
     def _on_message_requeue(self, message, backoff=True, time_ms=-1, **kwargs):
         if backoff:
-            self.trigger('backoff', conn=self)
+            self.trigger(event.BACKOFF, conn=self)
         else:
-            self.trigger('continue', conn=self)
+            self.trigger(event.CONTINUE, conn=self)
 
         self.in_flight -= 1
         try:
@@ -404,24 +435,30 @@ class AsyncConn(EventedMixin):
             self.send(nsq.requeue(message.id, time_ms))
         except Exception, e:
             self.close()
-            self.trigger('error', conn=self, error=nsq.SendError(
+            self.trigger(event.ERROR, conn=self, error=nsq.SendError(
                 'failed to send REQ %s @ %d' % (message.id, time_ms), e))
 
     def _on_message_finish(self, message, **kwargs):
-        self.trigger('resume', conn=self)
+        self.trigger(event.RESUME, conn=self)
 
         self.in_flight -= 1
         try:
             self.send(nsq.finish(message.id))
         except Exception, e:
             self.close()
-            self.trigger('error', conn=self,
-                         error=nsq.SendError('failed to send FIN %s' % message.id, e))
+            self.trigger(
+                event.ERROR,
+                conn=self,
+                error=nsq.SendError('failed to send FIN %s' % message.id, e),
+            )
 
     def _on_message_touch(self, message, **kwargs):
         try:
             self.send(nsq.touch(message.id))
         except Exception, e:
             self.close()
-            self.trigger('error', conn=self,
-                         error=nsq.SendError('failed to send TOUCH %s' % message.id, e))
+            self.trigger(
+                event.ERROR,
+                conn=self,
+                error=nsq.SendError('failed to send TOUCH %s' % message.id, e),
+            )

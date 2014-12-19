@@ -11,11 +11,35 @@ class InvalidListenerError(Exception):
     pass
 
 
+# events
+CONNECT = 'connect'
+CLOSE = 'close'
+DATA = 'data'
+ERROR = 'error'
+IDENTIFY = 'identify'
+READY = 'ready'
+RESPONSE = 'response'
+MESSAGE = 'message'
+HEARTBEAT = 'heartbeat'
+BACKOFF = 'backoff'
+CONTINUE = 'continue'
+RESUME = 'resume'
+REQUEUE = 'requeue'
+TOUCH = 'touch'
+FINISH = 'finish'
+MESSAGE = 'message'
+AUTH = 'auth'
+AUTH_RESPONSE = 'auth_response'
+IDENTIFY_RESPONSE = 'identify_response'
+
+
 class EventedMixin(object):
     """
-    Provides methods to trigger and listen for arbitrary events named as strings.
+    Provides methods to trigger and listen for arbitrary events named as
+    strings.
     """
-    def __init__(self, *args, **kwargs):
+
+    def __init__(self):
         self.__listeners = defaultdict(list)
 
     def on(self, name, callback):
