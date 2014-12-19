@@ -14,7 +14,7 @@ try:
 except ImportError:
     import json  # pyflakes.ignore
 
-import tornado.ioloop
+from tornado.ioloop import PeriodicCallback
 import tornado.httpclient
 
 from .backoff_timer import BackoffTimer
@@ -208,6 +208,9 @@ class Reader(Client):
         # will execute when run() is called (for all Reader instances)
         self.io_loop.add_callback(self._run)
 
+        self.redist_periodic = None
+        self.query_periodic = None
+
     def _run(self):
         assert self.message_handler, "you must specify the Reader's message_handler"
 
@@ -217,10 +220,11 @@ class Reader(Client):
             address, port = addr.split(':')
             self.connect_to_nsqd(address, int(port))
 
-        self.redist_periodic = tornado.ioloop.PeriodicCallback(
+        self.redist_periodic = PeriodicCallback(
             self._redistribute_rdy_state,
             5 * 1000,
-            io_loop=self.io_loop)
+            io_loop=self.io_loop,
+        )
         self.redist_periodic.start()
 
         if not self.lookupd_http_addresses:
@@ -228,10 +232,11 @@ class Reader(Client):
         # trigger the first lookup query manually
         self.query_lookupd()
 
-        self.query_periodic = tornado.ioloop.PeriodicCallback(
+        self.query_periodic = PeriodicCallback(
             self.query_lookupd,
             self.lookupd_poll_interval * 1000,
-            io_loop=self.io_loop)
+            io_loop=self.io_loop,
+        )
 
         # randomize the time we start this poll loop so that all
         # consumers don't query at exactly the same time

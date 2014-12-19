@@ -10,6 +10,7 @@ class SyncConn(object):
     def __init__(self, timeout=1.0):
         self.buffer = ''
         self.timeout = timeout
+        self.s = None
 
     def connect(self, host, port):
         assert isinstance(host, (str, unicode))

@@ -159,6 +159,16 @@ class AsyncConn(event.EventedMixin):
 
         self._authentication_required = False  # tracking server auth state
         self.auth_secret = auth_secret
+
+        self.socket = None
+        self.stream = None
+        self._features_to_enable = []
+
+        self.last_rdy = 0
+        self.rdy = 0
+
+        self.callback_queue = []
+
         super(AsyncConn, self).__init__()
 
     @property
@@ -341,7 +351,6 @@ class AsyncConn(event.EventedMixin):
 
         self.trigger(event.IDENTIFY_RESPONSE, conn=self, data=data)
 
-        self._features_to_enable = []
         if self.tls_v1 and data.get('tls_v1'):
             self._features_to_enable.append('tls_v1')
         if self.snappy and data.get('snappy'):
