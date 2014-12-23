@@ -19,7 +19,7 @@ import tornado.httpclient
 
 from .backoff_timer import BackoffTimer
 from .client import Client
-from . import nsq
+from . import protocol
 from . import async
 
 logger = logging.getLogger(__name__)
@@ -485,7 +485,7 @@ class Reader(Client):
         return conn
 
     def _on_connection_ready(self, conn, **kwargs):
-        conn.send(nsq.subscribe(self.topic, self.channel))
+        conn.send(protocol.subscribe(self.topic, self.channel))
         # re-check to make sure another connection didn't beat this one done
         if conn.id in self.conns:
             logger.warning(

@@ -4,7 +4,7 @@ import signal
 import tornado.ioloop
 import logging
 
-from .nsq import (
+from .protocol import (
   Error,
   unpack_response,
   decode_message,

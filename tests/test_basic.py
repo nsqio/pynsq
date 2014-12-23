@@ -9,7 +9,8 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-from nsq import BackoffTimer, nsq
+from nsq import BackoffTimer
+from nsq import protocol
 
 
 def pytest_generate_tests(metafunc):
@@ -35,11 +36,11 @@ def pytest_generate_tests(metafunc):
 
 
 def test_topic_names(name, good):
-    assert nsq.valid_topic_name(name) == good
+    assert protocol.valid_topic_name(name) == good
 
 
 def test_channel_names(name, good):
-    assert nsq.valid_channel_name(name) == good
+    assert protocol.valid_channel_name(name) == good
 
 
 def test_backoff_timer():

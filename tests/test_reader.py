@@ -15,7 +15,7 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-from nsq import nsq
+from nsq import protocol
 from nsq.async import AsyncConn
 from nsq.deflate_socket import DeflateSocket
 from nsq.reader import Reader
@@ -113,7 +113,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
 
         def _on_ready(*args, **kwargs):
             c.on('response', self.stop)
-            c.send(nsq.subscribe(topic, 'ch'))
+            c.send(protocol.subscribe(topic, 'ch'))
 
         c.on('ready', _on_ready)
         c.connect()
@@ -128,7 +128,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
 
         def _on_ready(*args, **kwargs):
             for i in range(count):
-                c.send(nsq.pub(topic, body))
+                c.send(protocol.pub(topic, body))
 
         c.on('ready', _on_ready)
 
@@ -148,7 +148,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
 
         def _on_ready(*args, **kwargs):
             c.on('message', _on_message)
-            c.send(nsq.subscribe(topic, 'ch'))
+            c.send(protocol.subscribe(topic, 'ch'))
             c.send_rdy(5)
 
         c.on('ready', _on_ready)

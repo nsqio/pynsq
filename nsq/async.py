@@ -26,8 +26,7 @@ import tornado.iostream
 import tornado.ioloop
 import tornado.simple_httpclient
 
-from . import nsq
-from nsq import event
+from nsq import event, protocol
 from .deflate_socket import DeflateSocket
 
 logger = logging.getLogger(__name__)
@@ -219,7 +218,7 @@ class AsyncConn(event.EventedMixin):
 
     def _connect_callback(self):
         self.state = CONNECTED
-        self.stream.write(nsq.MAGIC_V2)
+        self.stream.write(protocol.MAGIC_V2)
         self._start_read()
         self.trigger(event.CONNECT, conn=self)
 
@@ -242,7 +241,7 @@ class AsyncConn(event.EventedMixin):
             self.trigger(
                 event.ERROR,
                 conn=self,
-                error=nsq.IntegrityError('failed to unpack size'),
+                error=protocol.IntegrityError('failed to unpack size'),
             )
 
     def _read_body(self, data):
@@ -310,13 +309,13 @@ class AsyncConn(event.EventedMixin):
 
     def send_rdy(self, value):
         try:
-            self.send(nsq.ready(value))
+            self.send(protocol.ready(value))
         except Exception, e:
             self.close()
             self.trigger(
                 event.ERROR,
                 conn=self,
-                error=nsq.SendError('failed to send RDY %d' % value, e),
+                error=protocol.SendError('failed to send RDY %d' % value, e),
             )
             return False
         self.last_rdy = value
@@ -341,13 +340,13 @@ class AsyncConn(event.EventedMixin):
         self.trigger(event.IDENTIFY, conn=self, data=identify_data)
         self.on(event.RESPONSE, self._on_identify_response)
         try:
-            self.send(nsq.identify(identify_data))
+            self.send(protocol.identify(identify_data))
         except Exception, e:
             self.close()
             self.trigger(
                 event.ERROR,
                 conn=self,
-                error=nsq.SendError('failed to bootstrap connection', e),
+                error=protocol.SendError('failed to bootstrap connection', e),
             )
 
     def _on_identify_response(self, data, **kwargs):
@@ -364,7 +363,7 @@ class AsyncConn(event.EventedMixin):
             self.trigger(
                 event.ERROR,
                 conn=self,
-                error=nsq.IntegrityError(
+                error=protocol.IntegrityError(
                     'failed to parse IDENTIFY response JSON from nsqd - %r' %
                     data
                 ),
@@ -403,13 +402,13 @@ class AsyncConn(event.EventedMixin):
             self.on(event.RESPONSE, self._on_auth_response)
             self.trigger(event.AUTH, conn=self, data=self.auth_secret)
             try:
-                self.send(nsq.auth(self.auth_secret))
+                self.send(protocol.auth(self.auth_secret))
             except Exception, e:
                 self.close()
                 self.trigger(
                     event.ERROR,
                     conn=self,
-                    error=nsq.SendError('Error sending AUTH', e),
+                    error=protocol.SendError('Error sending AUTH', e),
                 )
             return
         self.trigger(event.READY, conn=self)
@@ -422,7 +421,7 @@ class AsyncConn(event.EventedMixin):
             self.trigger(
                 event.ERROR,
                 conn=self,
-                error=nsq.IntegrityError(
+                error=protocol.IntegrityError(
                     'failed to parse AUTH response JSON from nsqd - %r' % data
                 ),
             )
@@ -434,25 +433,25 @@ class AsyncConn(event.EventedMixin):
 
     def _on_data(self, data, **kwargs):
         self.last_recv_timestamp = time.time()
-        frame, data = nsq.unpack_response(data)
-        if frame == nsq.FRAME_TYPE_MESSAGE:
+        frame, data = protocol.unpack_response(data)
+        if frame == protocol.FRAME_TYPE_MESSAGE:
             self.last_msg_timestamp = time.time()
             self.rdy = max(self.rdy - 1, 0)
             self.in_flight += 1
 
-            message = nsq.decode_message(data)
+            message = protocol.decode_message(data)
             message.on(event.FINISH, self._on_message_finish)
             message.on(event.REQUEUE, self._on_message_requeue)
             message.on(event.TOUCH, self._on_message_touch)
 
             self.trigger(event.MESSAGE, conn=self, message=message)
-        elif frame == nsq.FRAME_TYPE_RESPONSE and data == '_heartbeat_':
-            self.send(nsq.nop())
+        elif frame == protocol.FRAME_TYPE_RESPONSE and data == '_heartbeat_':
+            self.send(protocol.nop())
             self.trigger(event.HEARTBEAT, conn=self)
-        elif frame == nsq.FRAME_TYPE_RESPONSE:
+        elif frame == protocol.FRAME_TYPE_RESPONSE:
             self.trigger(event.RESPONSE, conn=self, data=data)
-        elif frame == nsq.FRAME_TYPE_ERROR:
-            self.trigger(event.ERROR, conn=self, error=nsq.Error(data))
+        elif frame == protocol.FRAME_TYPE_ERROR:
+            self.trigger(event.ERROR, conn=self, error=protocol.Error(data))
 
     def _on_message_requeue(self, message, backoff=True, time_ms=-1, **kwargs):
         if backoff:
@@ -463,10 +462,10 @@ class AsyncConn(event.EventedMixin):
         self.in_flight -= 1
         try:
             time_ms = self.requeue_delay * message.attempts * 1000 if time_ms < 0 else time_ms
-            self.send(nsq.requeue(message.id, time_ms))
+            self.send(protocol.requeue(message.id, time_ms))
         except Exception, e:
             self.close()
-            self.trigger(event.ERROR, conn=self, error=nsq.SendError(
+            self.trigger(event.ERROR, conn=self, error=protocol.SendError(
                 'failed to send REQ %s @ %d' % (message.id, time_ms), e))
 
     def _on_message_finish(self, message, **kwargs):
@@ -474,22 +473,22 @@ class AsyncConn(event.EventedMixin):
 
         self.in_flight -= 1
         try:
-            self.send(nsq.finish(message.id))
+            self.send(protocol.finish(message.id))
         except Exception, e:
             self.close()
             self.trigger(
                 event.ERROR,
                 conn=self,
-                error=nsq.SendError('failed to send FIN %s' % message.id, e),
+                error=protocol.SendError('failed to send FIN %s' % message.id, e),
             )
 
     def _on_message_touch(self, message, **kwargs):
         try:
-            self.send(nsq.touch(message.id))
+            self.send(protocol.touch(message.id))
         except Exception, e:
             self.close()
             self.trigger(
                 event.ERROR,
                 conn=self,
-                error=nsq.SendError('failed to send TOUCH %s' % message.id, e),
+                error=protocol.SendError('failed to send TOUCH %s' % message.id, e),
             )
