@@ -5,23 +5,23 @@ import tornado.ioloop
 import logging
 
 from .protocol import (
-  Error,
-  unpack_response,
-  decode_message,
-  valid_topic_name,
-  valid_channel_name,
-  identify,
-  subscribe,
-  ready,
-  finish,
-  touch,
-  requeue,
-  nop,
-  pub,
-  mpub,
-  FRAME_TYPE_RESPONSE,
-  FRAME_TYPE_ERROR,
-  FRAME_TYPE_MESSAGE,
+    Error,
+    unpack_response,
+    decode_message,
+    valid_topic_name,
+    valid_channel_name,
+    identify,
+    subscribe,
+    ready,
+    finish,
+    touch,
+    requeue,
+    nop,
+    pub,
+    mpub,
+    FRAME_TYPE_RESPONSE,
+    FRAME_TYPE_ERROR,
+    FRAME_TYPE_MESSAGE,
 )
 from .message import Message
 from .backoff_timer import BackoffTimer
@@ -35,8 +35,7 @@ from .version import __version__  # NOQA
 
 def _handle_term_signal(sig_num, frame):
     logging.getLogger(__name__).info(
-      'TERM Signal handler called with signal %r', sig_num
-    )
+        'TERM Signal handler called with signal %r', sig_num)
     tornado.ioloop.IOLoop.instance().stop()
 
 

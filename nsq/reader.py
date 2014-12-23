@@ -132,12 +132,23 @@ class Reader(Client):
 
     :param \*\*kwargs: passed to :class:`nsq.AsyncConn` initialization
     """
-    def __init__(self, topic, channel, message_handler=None, name=None,
-                 nsqd_tcp_addresses=None, lookupd_http_addresses=None,
-                 max_tries=5, max_in_flight=1, lookupd_poll_interval=60,
-                 low_rdy_idle_timeout=10, max_backoff_duration=128, lookupd_poll_jitter=0.3,
-                 lookupd_connect_timeout=1, lookupd_request_timeout=2,
-                 **kwargs):
+    def __init__(
+            self,
+            topic,
+            channel,
+            message_handler=None,
+            name=None,
+            nsqd_tcp_addresses=None,
+            lookupd_http_addresses=None,
+            max_tries=5,
+            max_in_flight=1,
+            lookupd_poll_interval=60,
+            low_rdy_idle_timeout=10,
+            max_backoff_duration=128,
+            lookupd_poll_jitter=0.3,
+            lookupd_connect_timeout=1,
+            lookupd_request_timeout=2,
+            **kwargs):
         super(Reader, self).__init__(**kwargs)
 
         assert isinstance(topic, (str, unicode)) and len(topic) > 0

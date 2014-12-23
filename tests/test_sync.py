@@ -23,7 +23,8 @@ def mock_response_write_message(c, timestamp, attempts, id, body):
     timestamp_packed = struct.pack('>q', timestamp)
     attempts_packed = struct.pack('>h', attempts)
     id = "%016d" % id
-    mock_response_write(c, protocol.FRAME_TYPE_MESSAGE, timestamp_packed + attempts_packed + id + body)
+    mock_response_write(
+        c, protocol.FRAME_TYPE_MESSAGE, timestamp_packed + attempts_packed + id + body)
 
 
 def test_sync_authenticate_subscribe():

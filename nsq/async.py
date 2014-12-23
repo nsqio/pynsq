@@ -132,8 +132,7 @@ class AsyncConn(event.EventedMixin):
             output_buffer_timeout=250,
             sample_rate=0,
             io_loop=None,
-            auth_secret=None
-        ):
+            auth_secret=None):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
