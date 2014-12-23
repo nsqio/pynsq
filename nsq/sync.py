@@ -3,13 +3,14 @@ from __future__ import absolute_import
 import socket
 import struct
 
-from . import nsq
+from nsq import protocol
 
 
 class SyncConn(object):
     def __init__(self, timeout=1.0):
         self.buffer = ''
         self.timeout = timeout
+        self.s = None
 
     def connect(self, host, port):
         assert isinstance(host, (str, unicode))
@@ -17,7 +18,7 @@ class SyncConn(object):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.settimeout(self.timeout)
         self.s.connect((host, port))
-        self.s.send(nsq.MAGIC_V2)
+        self.s.send(protocol.MAGIC_V2)
 
     def _readn(self, size):
         while True:

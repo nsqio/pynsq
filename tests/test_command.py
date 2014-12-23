@@ -15,7 +15,7 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-from nsq import nsq
+from nsq import protocol
 
 
 def pytest_generate_tests(metafunc):
@@ -28,42 +28,42 @@ def pytest_generate_tests(metafunc):
     mpub_body = struct.pack('>l', len(msgs)) + ''.join(struct.pack('>l', len(m)) + m for m in msgs)
     if metafunc.function == test_command:
         for cmd_method, kwargs, result in [
-                (nsq.identify,
+                (protocol.identify,
                     {'data': identify_dict_ascii},
                     'IDENTIFY\n' + struct.pack('>l', len(identify_body_ascii)) +
                     identify_body_ascii),
-                (nsq.identify,
+                (protocol.identify,
                     {'data': identify_dict_unicode},
                     'IDENTIFY\n' + struct.pack('>l', len(identify_body_unicode)) +
                     identify_body_unicode),
-                (nsq.subscribe,
+                (protocol.subscribe,
                     {'topic': 'test_topic', 'channel': 'test_channel'},
                     'SUB test_topic test_channel\n'),
-                (nsq.finish,
+                (protocol.finish,
                     {'id': 'test'},
                     'FIN test\n'),
-                (nsq.finish,
+                (protocol.finish,
                     {'id': u'\u2020est \xfcn\xee\xe7\xf8\u2202\xe9'},
                     'FIN \xe2\x80\xa0est \xc3\xbcn\xc3\xae\xc3\xa7\xc3\xb8\xe2\x88\x82\xc3\xa9\n'),
-                (nsq.requeue,
+                (protocol.requeue,
                     {'id': 'test'},
                     'REQ test 0\n'),
-                (nsq.requeue,
+                (protocol.requeue,
                     {'id': 'test', 'time_ms': 60},
                     'REQ test 60\n'),
-                (nsq.touch,
+                (protocol.touch,
                     {'id': 'test'},
                     'TOUCH test\n'),
-                (nsq.ready,
+                (protocol.ready,
                     {'count': 100},
                     'RDY 100\n'),
-                (nsq.nop,
+                (protocol.nop,
                     {},
                     'NOP\n'),
-                (nsq.pub,
+                (protocol.pub,
                     {'topic': 'test', 'data': msgs[0]},
                     'PUB test\n' + struct.pack('>l', len(msgs[0])) + msgs[0]),
-                (nsq.mpub,
+                (protocol.mpub,
                     {'topic': 'test', 'data': msgs},
                     'MPUB test\n' + struct.pack('>l', len(mpub_body)) + mpub_body)
                 ]:
@@ -75,4 +75,4 @@ def test_command(cmd_method, kwargs, result):
 
 
 def test_unicode_body():
-    pytest.raises(AssertionError, nsq.pub, 'topic', u'unicode body')
+    pytest.raises(AssertionError, protocol.pub, 'topic', u'unicode body')

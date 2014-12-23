@@ -45,8 +45,7 @@ class SendError(Error):
     def __str__(self):
         return 'SendError: %s (%s)' % (self.msg, self.error)
 
-    def __repr__(self):
-        return 'SendError: %s (%s)' % (self.msg, self.error)
+    __repr__ = __str__
 
 
 class ConnectionClosedError(Error):
@@ -131,10 +130,13 @@ def mpub(topic, data):
     return _command(MPUB, body, topic)
 
 
+VALID_NAME_RE = re.compile(r'^[\.a-zA-Z0-9_-]+(#ephemeral)?$')
+
+
 def _is_valid_name(name):
     if not 0 < len(name) < 65:
         return False
-    if re.match(r'^[\.a-zA-Z0-9_-]+(#ephemeral)?$', name):
+    if VALID_NAME_RE.match(name):
         return True
     return False
 

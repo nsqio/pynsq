@@ -13,7 +13,8 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-import nsq
+from nsq.async import AsyncConn
+from nsq import protocol
 
 
 # The functions below are meant to be used as specs for mocks of callbacks. Yay dynamic typing
@@ -22,7 +23,7 @@ def f(*args, **kwargs):
 
 
 def _get_test_conn(io_loop=None):
-    conn = nsq.async.AsyncConn('test', 4150, io_loop=io_loop)
+    conn = AsyncConn('test', 4150, io_loop=io_loop)
     # now set the stream attribute, which is ordinarily set in conn.connect()
     conn.stream = create_autospec(IOStream)
     return conn
@@ -60,7 +61,7 @@ def test_connect_callback():
     with patch.object(conn, '_start_read', autospec=True) as mock_start_read:
         conn._connect_callback()
         assert conn.state == 'CONNECTED'
-        conn.stream.write.assert_called_once_with(nsq.nsq.MAGIC_V2)
+        conn.stream.write.assert_called_once_with(protocol.MAGIC_V2)
         mock_start_read.assert_called_once_with()
         on_connect.assert_called_once_with(conn=conn)
 

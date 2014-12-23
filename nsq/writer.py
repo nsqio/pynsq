@@ -8,7 +8,7 @@ import random
 import inspect
 
 from .client import Client
-from . import nsq
+from nsq import protocol
 from . import async
 
 logger = logging.getLogger(__name__)
@@ -124,12 +124,12 @@ class Writer(Client):
                                          topic=topic, msg=msg)
 
         if not self.conns:
-            callback(None, nsq.SendError('no connections'))
+            callback(None, protocol.SendError('no connections'))
             return
 
         conn = random.choice(self.conns.values())
         conn.callback_queue.append(callback)
-        cmd = getattr(nsq, command)
+        cmd = getattr(protocol, command)
         try:
             conn.send(cmd(topic, msg))
         except Exception:
@@ -189,7 +189,7 @@ class Writer(Client):
 
         for callback in conn.callback_queue:
             try:
-                callback(conn, nsq.ConnectionClosedError())
+                callback(conn, protocol.ConnectionClosedError())
             except Exception:
                 logger.exception('[%s] uncaught exception in callback', conn.id)
 
@@ -200,6 +200,6 @@ class Writer(Client):
         self.io_loop.add_timeout(time.time() + self.reconnect_interval, reconnect_callback)
 
     def _finish_pub(self, conn, data, command, topic, msg):
-        if isinstance(data, nsq.Error):
+        if isinstance(data, protocol.Error):
             logger.error('[%s] failed to %s (%s, %s), data is %s',
                          conn.id if conn else 'NA', command, topic, msg, data)
