@@ -29,6 +29,7 @@ import tornado.simple_httpclient
 from . import nsq
 from nsq import event
 from .deflate_socket import DeflateSocket
+from .compat import DEFAULT_CA_CERTS
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +236,7 @@ class AsyncConn(event.EventedMixin):
 
         opts = {
             'cert_reqs': ssl.CERT_REQUIRED,
-            'ca_certs': tornado.simple_httpclient._DEFAULT_CA_CERTS
+            'ca_certs': DEFAULT_CA_CERTS,
         }
         opts.update(options or {})
         self.socket = ssl.wrap_socket(self.socket, ssl_version=ssl.PROTOCOL_TLSv1,
