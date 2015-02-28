@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.6 - 2015-02-28
+
+ * #116 - fix `Message.requeue()` `delay` param
+ * #103 - suppor `#ephemeral` topics
+ * #106/#108/#110/#111/#114 - python 3.0 compatibility
+
 ## 0.6.5 - 2014-11-11
 
  * #100 - add `Reader.close()`
