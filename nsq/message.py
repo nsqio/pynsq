@@ -101,7 +101,8 @@ class Message(event.EventedMixin):
         :type delay: int
         """
 
-        # convert delay to time_ms for fixing https://github.com/bitly/pynsq/issues/71 and maintaining
+        # convert delay to time_ms for fixing
+        # https://github.com/bitly/pynsq/issues/71 and maintaining
         # backward compatibility
         if 'delay' in kwargs and isinstance(kwargs['delay'], int) and kwargs['delay'] > 0:
             kwargs['time_ms'] = kwargs['delay'] * 1000

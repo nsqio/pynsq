@@ -87,7 +87,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
 
     def test_conn_identify_options(self):
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                                **self.identify_options)
+                      **self.identify_options)
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
@@ -99,7 +99,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
 
     def test_conn_socket_upgrade(self):
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                                **self.identify_options)
+                      **self.identify_options)
         c.on('ready', self.stop)
         c.connect()
         self.wait()
@@ -109,7 +109,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
     def test_conn_subscribe(self):
         topic = 'test_conn_suscribe_%s' % time.time()
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                                **self.identify_options)
+                      **self.identify_options)
 
         def _on_ready(*args, **kwargs):
             c.on('response', self.stop)
@@ -139,7 +139,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         self._send_messages(topic, 5, 'sup')
 
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                                **self.identify_options)
+                      **self.identify_options)
 
         def _on_message(*args, **kwargs):
             self.msg_count += 1
@@ -172,8 +172,8 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
             return True
 
         Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
-                   io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
-                   **self.identify_options)
+               io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+               **self.identify_options)
 
         self.wait()
 
@@ -216,7 +216,7 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
 
     def test_conn_identify_options(self):
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                                **self.identify_options)
+                      **self.identify_options)
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
@@ -228,7 +228,7 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
 
     def test_conn_socket_upgrade(self):
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                                **self.identify_options)
+                      **self.identify_options)
         c.on('ready', self.stop)
         c.connect()
         self.wait()
