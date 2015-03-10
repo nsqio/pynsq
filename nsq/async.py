@@ -226,7 +226,7 @@ class AsyncConn(event.EventedMixin):
 
     def _socket_close(self):
         self.state = DISCONNECTED
-        self.trigger(event.CONNECT, conn=self)
+        self.trigger(event.CLOSE, conn=self)
 
     def close(self):
         self.stream.close()
