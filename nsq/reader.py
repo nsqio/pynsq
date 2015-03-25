@@ -262,7 +262,8 @@ class Reader(Client):
             conn.close()
 
         self.redist_periodic.stop()
-        self.query_periodic.stop()
+        if self.query_periodic is not None:
+            self.query_periodic.stop()
 
     def set_message_handler(self, message_handler):
         """
