@@ -171,11 +171,12 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                 self.stop()
             return True
 
-        Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
-               io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
-               **self.identify_options)
+        r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                   io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+                   **self.identify_options)
 
         self.wait()
+        r.close()
 
     def test_reader_heartbeat(self):
         this = self
