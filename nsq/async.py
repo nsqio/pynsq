@@ -24,7 +24,14 @@ except ImportError:
 
 import tornado.iostream
 import tornado.ioloop
-import tornado.simple_httpclient
+
+try:
+    from tornado.simple_httpclient import _default_ca_certs as default_ca_certs
+except ImportError:
+    # Tornado < 4
+    from tornado.simple_httpclient import _DEFAULT_CA_CERTS
+    def default_ca_certs():
+        return _DEFAULT_CA_CERTS
 
 from nsq import event, protocol
 from .deflate_socket import DeflateSocket
@@ -265,7 +272,7 @@ class AsyncConn(event.EventedMixin):
 
         opts = {
             'cert_reqs': ssl.CERT_REQUIRED,
-            'ca_certs': tornado.simple_httpclient._DEFAULT_CA_CERTS
+            'ca_certs': default_ca_certs()
         }
         opts.update(options or {})
         self.socket = ssl.wrap_socket(self.socket, ssl_version=ssl.PROTOCOL_TLSv1,

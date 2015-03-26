@@ -41,3 +41,4 @@ class DeflateSocket(object):
     def send(self, data):
         chunk = self._compressor.compress(data)
         self._socket.send(chunk + self._compressor.flush(zlib.Z_SYNC_FLUSH))
+        return len(data)

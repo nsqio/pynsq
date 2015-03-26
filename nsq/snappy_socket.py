@@ -40,3 +40,4 @@ class SnappySocket(object):
     def send(self, data):
         chunk = self._compressor.add_chunk(data, compress=True)
         self._socket.send(chunk)
+        return len(data)
