@@ -1,2 +1,2 @@
 # also update in setup.py
-__version__ = '0.6.7-alpha'
+__version__ = '0.6.7'

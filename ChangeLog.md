@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.7 - 2015-04-07
+
+ * #124 - Tornado 4.x compatibility
+ * #123 - fix exception when `Reader` is stopped before periodic timers start
+ * #121 - trigger the correct `CLOSE` event when socket closes
+
 ## 0.6.6 - 2015-02-28
 
  * #116 - fix `Message.requeue()` `delay` param
