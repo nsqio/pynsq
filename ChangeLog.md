@@ -2,19 +2,19 @@
 
 ## 0.6.7 - 2015-04-07
 
- * #124 - Tornado 4.x compatibility
- * #123 - fix exception when `Reader` is stopped before periodic timers start
- * #121 - trigger the correct `CLOSE` event when socket closes
+ * #124 - Tornado 4.x compatibility (thanks @mpe)
+ * #123 - fix exception when `Reader` is stopped before periodic timers start (thanks @mpe)
+ * #121 - trigger the correct `CLOSE` event when socket closes (thanks @ellulpatrick)
 
 ## 0.6.6 - 2015-02-28
 
- * #116 - fix `Message.requeue()` `delay` param
+ * #116 - fix `Message.requeue()` `delay` param (thanks @bsphere)
  * #103 - suppor `#ephemeral` topics
- * #106/#108/#110/#111/#114 - python 3.0 compatibility
+ * #106/#108/#110/#111/#114 - python 3.0 compatibility (thanks @ijl)
 
 ## 0.6.5 - 2014-11-11
 
- * #100 - add `Reader.close()`
+ * #100 - add `Reader.close()` (thanks @jonesetc)
  * #99 - don't redistribute `RDY` when there aren't any connections
  * #98 - send `RDY` before `FIN`/`REQ` (for bitly/nsq#404)
  * #96 - fix exception when `Writer` has no connection
@@ -23,19 +23,19 @@
 
  * #91 - change order of max attempts check
  * #89 - properly handle `requeue(backoff=False)` when in backoff state
- * #87 - verify keyword args passed to `Reader`
+ * #87 - verify keyword args passed to `Reader` (thanks @stanhu)
  * #85 - fix `nsqlookupd` addresses specified without scheme
 
 ## 0.6.3 - 2014-07-11
 
- * #84 - use a named logger
- * #83 - add `DEFLATE` support
- * #80 - configurable `nsqlookupd` HTTP request timeouts
- * #78 - fix potential `Reader` connection index error
+ * #84 - use a named logger (thanks @virtuald)
+ * #83 - add `DEFLATE` support (thanks @wtolson)
+ * #80 - configurable `nsqlookupd` HTTP request timeouts (thanks @stanhu)
+ * #78 - fix potential `Reader` connection index error (thanks @xiaost)
  * #77 - more flexible `nsqlookupd` configuration
  * #76 - fix potential out-of-order backoff/resume
  * #72 - `AUTH` support
- * #73 - support 64char topic/channel names
+ * #73 - support 64char topic/channel names (thanks @svmehta)
 
 ## 0.6.2 - 2014-02-21
 
@@ -63,10 +63,10 @@ Snappy compression, and setting user agent metadata.
 Finally, there was a large *internal* refactoring in #52 to achieve better separation of
 concerns and pep8 compliance in #53.
 
- * #59 - add `nsq_to_nsq` example app (thanks [@ploxiln](https://github.com/ploxiln))
- * #58 - add user agent `IDENTIFY` metadata
+ * #59 - add `nsq_to_nsq` example app (thanks @ploxiln)
+ * #58 - add user agent `IDENTIFY` metadata (thanks @elubow)
  * #57 - add channel sampling feature negotiation
- * #55 - update `Message` docs (thanks [@dsoprea](https://github.com/dsoprea))
+ * #55 - update `Message` docs (thanks @dsoprea)
  * #53 - pep8
  * #52 - evented refactoring
  * #49 - add output buffering feature negotiation
