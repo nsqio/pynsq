@@ -16,7 +16,7 @@
 
  * #100 - add `Reader.close()` (thanks @jonesetc)
  * #99 - don't redistribute `RDY` when there aren't any connections
- * #98 - send `RDY` before `FIN`/`REQ` (for bitly/nsq#404)
+ * #98 - send `RDY` before `FIN`/`REQ` (for nsqio/nsq#404)
  * #96 - fix exception when `Writer` has no connection
 
 ## 0.6.4 - 2014-08-11

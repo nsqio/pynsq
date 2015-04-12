@@ -1,10 +1,10 @@
 ## pynsq
 
-`pynsq` is the official Python client library for [NSQ][nsq].
+The official Python client library for [NSQ][nsq].
 
 Latest stable release is **[0.6.7][latest_stable]**
 
-[![Build Status](https://secure.travis-ci.org/bitly/pynsq.png)](http://travis-ci.org/bitly/pynsq)
+[![Build Status](https://secure.travis-ci.org/nsqio/pynsq.png)](http://travis-ci.org/nsqio/pynsq)
 
 ### Installation
 
@@ -14,9 +14,9 @@ Latest stable release is **[0.6.7][latest_stable]**
 
 For HTML documentation, visit [https://pynsq.readthedocs.org/](https://pynsq.readthedocs.org/)
 
-## Running test cases
+### Tests
 
-These are the prerequisite for running test cases.
+These are the prerequisites for running tests:
 
      sudo apt-get install libsnappy-dev
      wget http://bitly-downloads.s3.amazonaws.com/nsq/nsq-0.2.28.linux-amd64.go1.2.1.tar.gz
@@ -28,4 +28,4 @@ To run test cases:
      python setup.py test
 
 [latest_stable]: https://pypi.python.org/pypi?:action=display&name=pynsq&version=0.6.7
-[nsq]: https://github.com/bitly/nsq
+[nsq]: https://github.com/nsqio/nsq
