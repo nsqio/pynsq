@@ -30,6 +30,7 @@ try:
 except ImportError:
     # Tornado < 4
     from tornado.simple_httpclient import _DEFAULT_CA_CERTS
+
     def default_ca_certs():
         return _DEFAULT_CA_CERTS
 
@@ -80,7 +81,7 @@ class AsyncConn(event.EventedMixin):
 
     :param timeout: the timeout for read/write operations (in seconds)
 
-    :param heartbeat_interval: the amount of time in seconds to negotiate
+    :param heartbeat_interval: the amount of time (in seconds) to negotiate
         with the connected producers to send heartbeats (requires nsqd 0.2.19+)
 
     :param requeue_delay: the base multiple used when calculating requeue delay
@@ -121,6 +122,10 @@ class AsyncConn(event.EventedMixin):
 
     :param auth_secret: a string passed when using nsq auth
         (requires nsqd 1.0+)
+
+    :param msg_timeout: the amount of time (in seconds) that nsqd will wait
+        before considering messages that have been delivered to this
+        consumer timed out (requires nsqd 0.2.28+)
     """
     def __init__(
             self,
@@ -139,7 +144,8 @@ class AsyncConn(event.EventedMixin):
             output_buffer_timeout=250,
             sample_rate=0,
             io_loop=None,
-            auth_secret=None):
+            auth_secret=None,
+            msg_timeout=None):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -153,6 +159,7 @@ class AsyncConn(event.EventedMixin):
         assert isinstance(auth_secret, (str, unicode, None.__class__))
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
+        assert msg_timeout is None or (isinstance(msg_timeout, (float, int)) and msg_timeout > 0)
 
         self.state = INIT
         self.host = host
@@ -174,6 +181,7 @@ class AsyncConn(event.EventedMixin):
         self.hostname = socket.gethostname()
         self.short_hostname = self.hostname.split('.')[0]
         self.heartbeat_interval = heartbeat_interval * 1000
+        self.msg_timeout = int(msg_timeout * 1000) if msg_timeout else None
         self.requeue_delay = requeue_delay
         self.io_loop = io_loop
         if not self.io_loop:
@@ -343,6 +351,8 @@ class AsyncConn(event.EventedMixin):
             'sample_rate': self.sample_rate,
             'user_agent': self.user_agent
         }
+        if self.msg_timeout:
+            identify_data['msg_timeout'] = self.msg_timeout
         self.trigger(event.IDENTIFY, conn=self, data=identify_data)
         self.on(event.RESPONSE, self._on_identify_response)
         try:
