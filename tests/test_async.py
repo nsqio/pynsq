@@ -5,7 +5,10 @@ import os
 import sys
 
 import struct
-from mock import patch, create_autospec, MagicMock
+try:  # py2
+    from mock import patch, create_autospec, MagicMock
+except ImportError:  # py3
+    from unittest.mock import patch, create_autospec, MagicMock
 from tornado.iostream import IOStream
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory

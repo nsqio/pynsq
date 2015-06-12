@@ -31,6 +31,7 @@ class SnappySocket(object):
             self._bootstrapped = None
             return data
         chunk = method(size)
+        uncompressed = None
         if chunk:
             uncompressed = self._decompressor.decompress(chunk)
         if not uncompressed:
@@ -51,7 +52,7 @@ class SnappySocket(object):
         # return the number of bytes sent. Otherwise, return the length of the
         # input data to reflect that all data was sent.
 
-        if (num_bytes_sent != len(chunk)):
+        if num_bytes_sent != len(chunk):
             return num_bytes_sent
 
         return len(data)

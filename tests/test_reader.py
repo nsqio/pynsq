@@ -28,7 +28,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         'snappy': True,
         'tls_v1': True,
         'tls_options': {'cert_reqs': ssl.CERT_NONE},
-        'heartbeat_interval': 10,
+        'heartbeat_interval': 1,
         'output_buffer_size': 4096,
         'output_buffer_timeout': 50
     }
@@ -47,7 +47,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         while True:
             try:
                 resp = http.fetch('http://127.0.0.1:4151/ping')
-                if resp.body == 'OK':
+                if resp.body == b'OK':
                     break
                 continue
             except:
@@ -81,7 +81,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
 
@@ -91,7 +91,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['snappy'] is True
@@ -118,9 +118,9 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('ready', _on_ready)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
-        assert response['data'] == 'OK'
+        assert response['data'] == b'OK'
 
     def _send_messages(self, topic, count, body):
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
@@ -165,7 +165,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         self._send_messages(topic, num_messages, 'sup')
 
         def handler(msg):
-            assert msg.body == 'sup'
+            assert msg.body == b'sup'
             self.msg_count += 1
             if self.msg_count >= num_messages:
                 self.stop()
@@ -206,7 +206,7 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
         'deflate_level': 6,
         'tls_v1': True,
         'tls_options': {'cert_reqs': ssl.CERT_NONE},
-        'heartbeat_interval': 10,
+        'heartbeat_interval': 1,
         'output_buffer_size': 4096,
         'output_buffer_timeout': 50
     }
@@ -221,7 +221,7 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['deflate'] is True

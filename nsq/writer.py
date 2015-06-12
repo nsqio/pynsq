@@ -8,8 +8,7 @@ import random
 import inspect
 
 from .client import Client
-from nsq import protocol
-from . import async
+from nsq import async, compat, protocol
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class Writer(Client):
             writer.pub('test', time.strftime('%H:%M:%S'), finish_pub)
 
         def finish_pub(conn, data):
-            print data
+            print(data)
 
         writer = nsq.Writer(['127.0.0.1:4150'])
         tornado.ioloop.PeriodicCallback(pub_message, 1000).start()
@@ -85,7 +84,7 @@ class Writer(Client):
         super(Writer, self).__init__(**kwargs)
 
         if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
-            assert isinstance(nsqd_tcp_addresses, (str, unicode))
+            assert isinstance(nsqd_tcp_addresses, compat.string_like)
             nsqd_tcp_addresses = [nsqd_tcp_addresses]
         assert nsqd_tcp_addresses
 
@@ -109,10 +108,35 @@ class Writer(Client):
         self.connect()
 
     def pub(self, topic, msg, callback=None):
+        """
+        Publish a single message.
+
+        :param str topic: The topic to publish to.
+
+        :param msg: Message payload. If this is not bytes, it is assumed to
+            be a UTF-8 encoded string.
+
+        :type msg: str, unicode, or bytes
+
+        :param callable callback: Callback invoked on response or error.
+        """
         self._pub('pub', topic, msg, callback)
 
     def mpub(self, topic, msg, callback=None):
-        if isinstance(msg, (str, unicode)):
+        """
+        Publish multiple messages in one network round trip.
+
+        :param str topic: The topic to publish to.
+
+        :param msg: Message payload. If this is not bytes or an iterable
+            of bytes, it is assumed to be a UTF-8 encoded string or an
+            iterable of UTF-8 encoded strings.
+
+        :type msg: str, unicode, or bytes
+
+        :param callable callback: Callback invoked on response or error.
+        """
+        if isinstance(msg, compat.string_like):
             msg = [msg]
         assert isinstance(msg, (list, set, tuple))
 
@@ -127,7 +151,7 @@ class Writer(Client):
             callback(None, protocol.SendError('no connections'))
             return
 
-        conn = random.choice(self.conns.values())
+        conn = random.choice(list(self.conns.values()))
         conn.callback_queue.append(callback)
         cmd = getattr(protocol, command)
         try:
@@ -153,7 +177,7 @@ class Writer(Client):
             self.connect_to_nsqd(host, int(port))
 
     def connect_to_nsqd(self, host, port):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, compat.string_like)
         assert isinstance(port, int)
 
         conn = async.AsyncConn(host, port, **self.conn_kwargs)

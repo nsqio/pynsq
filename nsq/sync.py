@@ -3,17 +3,17 @@ from __future__ import absolute_import
 import socket
 import struct
 
-from nsq import protocol
+from nsq import compat, protocol
 
 
 class SyncConn(object):
     def __init__(self, timeout=1.0):
-        self.buffer = ''
+        self.buffer = b''
         self.timeout = timeout
         self.s = None
 
     def connect(self, host, port):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, compat.string_like)
         assert isinstance(port, int)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.settimeout(self.timeout)
