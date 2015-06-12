@@ -9,10 +9,11 @@ except ImportError:
     import json  # pyflakes.ignore
 
 from .message import Message
+from nsq import compat
 
 
-MAGIC_V2 = '  V2'
-NL = '\n'
+MAGIC_V2 = compat.b('  V2')
+NL = compat.b('\n')
 
 
 FRAME_TYPE_RESPONSE = 0
@@ -21,16 +22,16 @@ FRAME_TYPE_MESSAGE = 2
 
 
 # commmands
-AUTH = 'AUTH'
-FIN = 'FIN'  # success
-IDENTIFY = 'IDENTIFY'
-MPUB = 'MPUB'
-NOP = 'NOP'
-PUB = 'PUB'  # publish
-RDY = 'RDY'
-REQ = 'REQ'  # requeue
-SUB = 'SUB'
-TOUCH = 'TOUCH'
+AUTH = compat.b('AUTH')
+FIN = compat.b('FIN')  # success
+IDENTIFY = compat.b('IDENTIFY')
+MPUB = compat.b('MPUB')
+NOP = compat.b('NOP')
+PUB = compat.b('PUB')  # publish
+RDY = compat.b('RDY')
+REQ = compat.b('REQ')  # requeue
+SUB = compat.b('SUB')
+TOUCH = compat.b('TOUCH')
 
 
 class Error(Exception):
@@ -70,15 +71,24 @@ def decode_message(data):
 
 
 def _command(cmd, body, *params):
-    body_data = ''
-    params_data = ''
+    body_prefix = b''
+    params_data = b''
     if body:
-        assert isinstance(body, str), 'body must be a string'
-        body_data = struct.pack('>l', len(body)) + body
+        assert isinstance(body, compat.string_like), 'body must be a string'
+        if isinstance(body, compat.unicode):
+            body = body.encode('utf-8')
+        body_prefix = compat.b(struct.pack(b'>l', len(body)))
+    else:
+        body = b''  # None or u""
     if len(params):
-        params = [p.encode('utf-8') if isinstance(p, unicode) else p for p in params]
-        params_data = ' ' + ' '.join(params)
-    return '%s%s%s%s' % (cmd, params_data, NL, body_data)
+        params = [
+            p.encode('utf-8')
+            if isinstance(p, compat.unicode)
+            else p
+            for p in params
+        ]
+        params_data = b' ' + b' '.join(params)
+    return b''.join((cmd, params_data, NL, body_prefix, body))
 
 
 def subscribe(topic, channel):

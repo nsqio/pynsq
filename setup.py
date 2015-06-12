@@ -18,6 +18,17 @@ class PyTest(TestCommand):
 # also update in nsq/version.py
 version = '0.6.8-alpha'
 
+PY3 = sys.version_info >= (3, 0)
+
+TESTS_REQUIRE = [
+    'pytest',
+    'simplejson',
+    'python-snappy',
+]
+
+if not PY3:
+    TESTS_REQUIRE.append('mock')
+
 
 setup(
     name='pynsq',
@@ -35,8 +46,7 @@ setup(
     install_requires=['tornado'],
     include_package_data=True,
     zip_safe=False,
-    tests_require=['pytest', 'mock', 'simplejson',
-                   'python-snappy', 'tornado'],
+    tests_require=TESTS_REQUIRE,
     cmdclass={'test': PyTest},
     classifiers=[
         'Development Status :: 4 - Beta',
@@ -44,6 +54,8 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: Implementation :: CPython',
     ]
 )

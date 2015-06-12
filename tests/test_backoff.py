@@ -6,7 +6,10 @@ import sys
 import random
 import time
 
-from mock import patch, create_autospec
+try:
+    from mock import create_autospec, MagicMock, patch
+except ImportError:
+    from unittest.mock import create_autospec, MagicMock, patch
 from tornado.ioloop import IOLoop
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
@@ -15,7 +18,7 @@ if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
 import nsq
-from nsq import event
+from nsq import compat, event
 
 
 _conn_port = 4150
@@ -55,8 +58,19 @@ def _get_message(conn):
     return msg
 
 
-def test_backoff_easy():
+def _make_ioloop():
     mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop.time = MagicMock()
+    mock_ioloop.time.return_value = time.time()
+    return mock_ioloop
+
+
+def _assert_wrote_expected(conn, expected_args):
+    assert conn.stream.write.call_args_list == [((compat.b(arg),),) for arg in expected_args]
+
+
+def test_backoff_easy():
+    mock_ioloop = _make_ioloop()
     r = _get_reader(mock_ioloop)
     conn = _get_conn(r)
 
@@ -77,7 +91,7 @@ def test_backoff_easy():
     timeout_args[1]()
     assert r.backoff_block is False
     send_args, send_kwargs = conn.stream.write.call_args
-    assert send_args[0] == 'RDY 1\n'
+    assert send_args[0] == compat.b('RDY 1\n')
 
     msg = _send_message(conn)
 
@@ -96,11 +110,11 @@ def test_backoff_easy():
         'RDY 5\n',
         'FIN 1234\n'
     ]
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    _assert_wrote_expected(conn, expected_args)
 
 
 def test_backoff_out_of_order():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _make_ioloop()
     r = _get_reader(mock_ioloop, max_in_flight=4)
     conn1 = _get_conn(r)
     conn2 = _get_conn(r)
@@ -139,7 +153,7 @@ def test_backoff_out_of_order():
         'FIN 1234\n',
         'RDY 2\n',
     ]
-    assert conn1.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    _assert_wrote_expected(conn1, expected_args)
 
     expected_args = [
         'SUB test test\n',
@@ -147,11 +161,11 @@ def test_backoff_out_of_order():
         'RDY 0\n',
         'RDY 2\n'
     ]
-    assert conn2.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    _assert_wrote_expected(conn2, expected_args)
 
 
 def test_backoff_requeue_recovery():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _make_ioloop()
     r = _get_reader(mock_ioloop, max_in_flight=2)
     conn = _get_conn(r)
     msg = _send_message(conn)
@@ -195,7 +209,7 @@ def test_backoff_requeue_recovery():
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
-    print conn.stream.write.call_args_list
+    print(conn.stream.write.call_args_list)
 
     expected_args = [
         'SUB test test\n',
@@ -211,11 +225,11 @@ def test_backoff_requeue_recovery():
         'RDY 2\n',
         'FIN 1234\n'
     ]
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    _assert_wrote_expected(conn, expected_args)
 
 
 def test_backoff_hard():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _make_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
     conn = _get_conn(r)
 
@@ -277,12 +291,12 @@ def test_backoff_hard():
     assert r.backoff_timer.get_interval() == 0
 
     for i, call in enumerate(conn.stream.write.call_args_list):
-        print "%d: %s" % (i, call)
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+        print("%d: %s" % (i, call))
+    _assert_wrote_expected(conn, expected_args)
 
 
 def test_backoff_many_conns():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _make_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
 
     num_conns = 5
@@ -336,7 +350,7 @@ def test_backoff_many_conns():
             fail = False
 
     while total_fails:
-        print "%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails)
+        print("%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails))
 
         if not conn.fails:
             # force an idle connection
@@ -376,12 +390,12 @@ def test_backoff_many_conns():
 
     for c in conns:
         for i, call in enumerate(c.stream.write.call_args_list):
-            print "%d: %s" % (i, call)
-        assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
+            print("%d: %s" % (i, call))
+        _assert_wrote_expected(c, c.expected_args)
 
 
 def test_backoff_conns_disconnect():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _make_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
 
     num_conns = 5
@@ -453,7 +467,7 @@ def test_backoff_conns_disconnect():
             fail = False
 
     while total_fails:
-        print "%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails)
+        print("%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails))
 
         msg = _send_message(conn)
 
@@ -483,5 +497,5 @@ def test_backoff_conns_disconnect():
 
     for c in conns:
         for i, call in enumerate(c.stream.write.call_args_list):
-            print "%d: %s" % (i, call)
-        assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
+            print("%d: %s" % (i, call))
+        _assert_wrote_expected(c, c.expected_args)
