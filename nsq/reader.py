@@ -7,6 +7,7 @@ import urllib
 import random
 import urlparse
 import cgi
+import warnings
 import inspect
 
 try:
@@ -348,7 +349,7 @@ class Reader(Client):
             return message.requeue()
 
     def _maybe_update_rdy(self, conn):
-        if self.backoff_timer.get_interval():
+        if self.backoff_timer.get_interval() or self.max_in_flight == 0:
             return
 
         if conn.rdy <= 1 or conn.rdy < int(conn.last_rdy * 0.25):
@@ -366,7 +367,7 @@ class Reader(Client):
 
         # test the waters after finishing a backoff round
         # if we have no connections, this will happen when a new connection gets RDY 1
-        if not self.conns:
+        if not self.conns or self.max_in_flight == 0:
             return
 
         conn = random.choice(self.conns.values())
@@ -436,7 +437,7 @@ class Reader(Client):
             self.io_loop.remove_timeout(conn.rdy_timeout)
             conn.rdy_timeout = None
 
-        if value and self.disabled():
+        if value and (self.disabled() or self.max_in_flight == 0):
             logger.info('[%s:%s] disabled, delaying RDY state change', conn.id, self.name)
             rdy_retry_callback = functools.partial(self._rdy_retry, conn, value)
             conn.rdy_timeout = self.io_loop.add_timeout(time.time() + 15, rdy_retry_callback)
@@ -603,7 +604,24 @@ class Reader(Client):
             address = producer.get('broadcast_address', producer.get('address'))
             assert address
             self.connect_to_nsqd(address, producer['tcp_port'])
-
+    
+    def set_max_in_flight(self, max_in_flight):
+        """dynamically adjust the reader max_in_flight count. Set to 0 to immediately disable a Reader"""
+        assert isinstance(max_in_flight, int)
+        self.max_in_flight = max_in_flight
+        
+        if max_in_flight == 0:
+            # set RDY 0 to all connections
+            for conn in self.conns.itervalues():
+                if conn.rdy > 0:
+                    logger.debug('[%s:%s] rdy: %d -> 0', conn.id, self.name, conn.rdy)
+                    self._send_rdy(conn, 0)
+            self.total_rdy = 0
+        else:
+            self.need_rdy_redistributed = True
+            self._redistribute_rdy_state()
+    
+    
     def _redistribute_rdy_state(self):
         # We redistribute RDY counts in a few cases:
         #
@@ -618,7 +636,7 @@ class Reader(Client):
         if not self.conns:
             return
 
-        if self.disabled() or self.backoff_block:
+        if self.disabled() or self.backoff_block or self.max_in_flight == 0:
             return
 
         if len(self.conns) > self.max_in_flight:
@@ -692,13 +710,37 @@ class Reader(Client):
         """
         logger.warning('[%s] giving up on message %s after %d tries (max:%d) %r',
                        self.name, message.id, message.attempts, self.max_tries, message.body)
+                       
+        
+    def _on_connection_identify_response(self, conn, data, **kwargs):
+        if not hasattr(self, '_disabled_notice'):
+            self._disabled_notice = True
 
-    def disabled(self):
+            def semver(v):
+                def cast(x):
+                    try:
+                        return int(x)
+                    except:
+                        return x
+                return map(cast, v.replace('-','.').split('.'))
+
+            if self.disabled.__code__ != Reader.disabled.__code__ and semver(data['version']) >= semver('0.3'):
+                logging.warning('disabled() deprecated and incompatible with nsqd >= 0.3. ' + 
+                    'It will be removed in a future release. Use set_max_in_flight(0) instead')
+                warnings.warn('disabled() is deprecated and will be removed in a future release, ' +
+                    'use set_max_in_flight(0) instead', DeprecationWarning)
+        return super(Reader, self)._on_connection_identify_response(conn, data, **kwargs)
+
+        
+    @classmethod
+    def disabled(cls):
         """
         Called as part of RDY handling to identify whether this Reader has been disabled
 
         This is useful to subclass and override to examine a file on disk or a key in cache
         to identify if this reader should pause execution (during a deploy, etc.).
+        
+        Note: deprecated. Use set_max_in_flight(0)
         """
         return False
 
