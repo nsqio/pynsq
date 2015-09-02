@@ -44,6 +44,7 @@ def run():
     Starts any instantiated :class:`nsq.Reader` or :class:`nsq.Writer`
     """
     signal.signal(signal.SIGTERM, _handle_term_signal)
+    signal.signal(signal.SIGINT, _handle_term_signal)
     tornado.ioloop.IOLoop.instance().start()
 
 
