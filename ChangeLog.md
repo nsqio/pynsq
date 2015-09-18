@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.8 - 2015-09-18
+
+ * #129 - fix Snappy `uncompressed` declaration
+ * #130 - add `SIGINT` handler (thanks @jonmorehouse)
+ * #117 - add `set_max_in_flight()` to replace broken, deprecated `disabled()`
+ * #126 - add `msg_timeout` option for `IDENTIFY`
+
 ## 0.6.7 - 2015-04-07
 
  * #124 - Tornado 4.x compatibility (thanks @mpe)
