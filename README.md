@@ -4,7 +4,7 @@ The official Python client library for [NSQ][nsq].
 
 Latest stable release is **[0.6.8][latest_stable]**
 
-[![Build Status](https://secure.travis-ci.org/nsqio/pynsq.png)](http://travis-ci.org/nsqio/pynsq)
+[![Build Status](https://secure.travis-ci.org/nsqio/pynsq.svg)](http://travis-ci.org/nsqio/pynsq)
 
 ### Installation
 
