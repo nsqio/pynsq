@@ -1,10 +1,8 @@
 ## pynsq
 
+[![Build Status](https://secure.travis-ci.org/nsqio/pynsq.svg)](http://travis-ci.org/nsqio/pynsq) [![GitHub release](https://img.shields.io/github/release/nsqio/pynsq.svg)](https://github.com/nsqio/pynsq/releases/latest) [![PyPI](https://img.shields.io/pypi/v/pynsq.svg)](https://pypi.python.org/pypi/pynsq) ![PyPI](https://img.shields.io/pypi/dm/pynsq.svg)]
+
 The official Python client library for [NSQ][nsq].
-
-Latest stable release is **[0.6.8][latest_stable]**
-
-[![Build Status](https://secure.travis-ci.org/nsqio/pynsq.svg)](http://travis-ci.org/nsqio/pynsq)
 
 ### Installation
 
@@ -27,5 +25,4 @@ To run test cases:
 
      python setup.py test
 
-[latest_stable]: https://pypi.python.org/pypi?:action=display&name=pynsq&version=0.6.8
 [nsq]: https://github.com/nsqio/nsq
