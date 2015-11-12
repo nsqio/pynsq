@@ -112,6 +112,10 @@ class Reader(Client):
     :param max_in_flight: the maximum number of messages this reader will pipeline for processing.
         this value will be divided evenly amongst the configured/discovered nsqd producers
 
+    :param message_timeout_handler: A callable that runs when a message times out. The parameters are
+        the AsyncConn used by the client and the message itself. In order to use this you must have
+        msg_timeout set on your :class:`nsq.reader.Reader` instance.
+
     :param lookupd_poll_interval: the amount of time in seconds between querying all of the supplied
         nsqlookupd instances.  a random amount of time based on thie value will be initially
         introduced in order to add jitter when multiple readers are running
@@ -143,6 +147,7 @@ class Reader(Client):
             lookupd_http_addresses=None,
             max_tries=5,
             max_in_flight=1,
+            message_timeout_handler=None,
             lookupd_poll_interval=60,
             low_rdy_idle_timeout=10,
             max_backoff_duration=128,
@@ -185,6 +190,9 @@ class Reader(Client):
         self.message_handler = None
         if message_handler:
             self.set_message_handler(message_handler)
+        self.message_timeout_handler = None
+        if message_timeout_handler:
+            self.set_message_timeout_handler(message_timeout_handler)
         self.topic = topic
         self.channel = channel
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
@@ -275,6 +283,18 @@ class Reader(Client):
         assert callable(message_handler), 'message_handler must be callable'
         self.message_handler = message_handler
 
+    def set_message_timeout_handler(self, message_timeout_handler):
+        """
+        Assigns the callback method to be executed for each message timeout that occurs. This method can only be used
+            in conjunction with the client-side msg_timeout setting. The client, otherwise, has no awareness of the
+            message's lifespan.
+
+        :param message_timeout_handler: a callable that takes a single argument (the :class:`nsq.message.Message`)
+        """
+        assert callable(message_timeout_handler), 'message_timeout_handler must be callable'
+        assert self.conn.msg_timeout is not None, 'msg_timeout must be set in order to use a timeout callback.'
+        self.message_timeout_handler = message_timeout_handler
+
     def _connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))
 
@@ -303,6 +323,13 @@ class Reader(Client):
             if conn.in_flight > 0 and conn.in_flight >= (conn.last_rdy * 0.85):
                 return True
         return False
+
+    def _on_message_timeout(self, conn, message):
+        try:
+            if self.message_timeout_handler is not None:
+                self.message_timeout_handler(message)
+        except Exception:
+            logger.exception('[%s:%s] failed to handle_message_timeout() %r', conn.id, self.name, message)
 
     def _on_message(self, conn, message, **kwargs):
         try:
@@ -476,6 +503,7 @@ class Reader(Client):
         conn.on('close', self._on_connection_close)
         conn.on('ready', self._on_connection_ready)
         conn.on('message', self._on_message)
+        conn.on('message_timeout', self._on_message_timeout)
         conn.on('heartbeat', self._on_heartbeat)
         conn.on('backoff', functools.partial(self._on_backoff_resume, success=False))
         conn.on('resume', functools.partial(self._on_backoff_resume, success=True))

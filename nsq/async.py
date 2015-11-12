@@ -468,6 +468,9 @@ class AsyncConn(event.EventedMixin):
             self.in_flight += 1
 
             message = protocol.decode_message(data)
+            if self.msg_timeout:
+                message._set_timeout(self)
+
             message.on(event.FINISH, self._on_message_finish)
             message.on(event.REQUEUE, self._on_message_requeue)
             message.on(event.TOUCH, self._on_message_touch)
