@@ -476,7 +476,7 @@ class AsyncConn(event.EventedMixin):
                     self.io_loop.remove_timeout(self.__timeouts[message.id])
 
                 self.__timeouts[message.id] = self.io_loop.add_timeout(
-                    self.msg_timeout/1000., self.trigger(event.MESSAGE_TIMEOUT, self, message)
+                    self.msg_timeout/1000., lambda: self.trigger(event.MESSAGE_TIMEOUT, self, message)
                 )
 
             message.on(event.FINISH, self._on_message_finish)
