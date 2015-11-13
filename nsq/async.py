@@ -386,6 +386,8 @@ class AsyncConn(event.EventedMixin):
 
         try:
             data = json.loads(data)
+            if self.msg_timeout is None:
+                self.msg_timeout = data.get('msg_timeout')
         except ValueError:
             self.close()
             self.trigger(
@@ -422,7 +424,7 @@ class AsyncConn(event.EventedMixin):
                 self.upgrade_to_snappy()
             elif feature == 'deflate':
                 self.upgrade_to_deflate()
-            # the server will 'OK' after these conneciton upgrades triggering another response
+            # the server will 'OK' after these connection upgrades triggering another response
             return
 
         self.off(event.RESPONSE, self._on_response_continue)

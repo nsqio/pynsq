@@ -113,8 +113,7 @@ class Reader(Client):
         this value will be divided evenly amongst the configured/discovered nsqd producers
 
     :param message_timeout_handler: A callable that runs when a message times out. The parameters are
-        the AsyncConn used by the client and the message itself. In order to use this you must have
-        msg_timeout set on your :class:`nsq.reader.Reader` instance.
+        the AsyncConn used by the client and the message itself.
 
     :param lookupd_poll_interval: the amount of time in seconds between querying all of the supplied
         nsqlookupd instances.  a random amount of time based on thie value will be initially
@@ -285,14 +284,11 @@ class Reader(Client):
 
     def set_message_timeout_handler(self, message_timeout_handler):
         """
-        Assigns the callback method to be executed for each message timeout that occurs. This method can only be used
-            in conjunction with the client-side msg_timeout setting. The client, otherwise, has no awareness of the
-            message's lifespan.
+        Assigns the callback method to be executed for each message timeout that occurs.
 
-        :param message_timeout_handler: a callable that takes a single argument (the :class:`nsq.message.Message`)
+        :param message_timeout_handler: a callable that takes a :class:`nsq.async.AsyncConn` and a :class:`nsq.message.Message`
         """
         assert callable(message_timeout_handler), 'message_timeout_handler must be callable'
-        assert self.conn.msg_timeout is not None, 'msg_timeout must be set in order to use a timeout callback.'
         self.message_timeout_handler = message_timeout_handler
 
     def _connection_max_in_flight(self):
@@ -327,7 +323,7 @@ class Reader(Client):
     def _on_message_timeout(self, conn, message):
         try:
             if self.message_timeout_handler is not None:
-                self.message_timeout_handler(message)
+                self.message_timeout_handler(conn, message)
         except Exception:
             logger.exception('[%s:%s] failed to handle_message_timeout() %r', conn.id, self.name, message)
 
