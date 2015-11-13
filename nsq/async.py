@@ -203,6 +203,7 @@ class AsyncConn(event.EventedMixin):
         self.rdy = 0
 
         self.callback_queue = []
+        self.__timeouts = {}
 
         super(AsyncConn, self).__init__()
 
@@ -471,11 +472,17 @@ class AsyncConn(event.EventedMixin):
 
             message = protocol.decode_message(data)
             if self.msg_timeout:
-                message._set_timeout(self)
+                if message.id in self.__timeouts:
+                    self.io_loop.remove_timeout(self.__timeouts[message.id])
+
+                self.__timeouts[message.id] = self.io_loop.add_timeout(
+                    self.msg_timeout/1000., self.trigger(event.MESSAGE_TIMEOUT, self, message)
+                )
 
             message.on(event.FINISH, self._on_message_finish)
             message.on(event.REQUEUE, self._on_message_requeue)
             message.on(event.TOUCH, self._on_message_touch)
+            message.on(event.TIMEOUT, self._on_message_timeout)
 
             self.trigger(event.MESSAGE, conn=self, message=message)
         elif frame == protocol.FRAME_TYPE_RESPONSE and data == '_heartbeat_':
@@ -525,3 +532,11 @@ class AsyncConn(event.EventedMixin):
                 conn=self,
                 error=protocol.SendError('failed to send TOUCH %s' % message.id, e),
             )
+
+    def _on_message_timeout(self, conn, message):
+        message.timed_out = True
+        if message.id in self.__timeouts:
+            timeout = self.__timeouts[message.id]
+            self.io_loop.remove_timeout(timeout)
+            del self.__timeouts[message.id]
+
