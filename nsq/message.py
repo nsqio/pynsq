@@ -65,7 +65,7 @@ class Message(event.EventedMixin):
         Indicates whether or not this :class:`nsq.message.Message` instance is timed out based on the
             msg_timeout parameter.
         """
-        return self.timed_out
+        return not self.timed_out
 
     def enable_async(self):
         """
