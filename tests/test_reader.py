@@ -197,6 +197,73 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                         heartbeat_interval=1)
         self.wait()
 
+    def test_timeout_propagates_to_reader(self):
+        self.msg_count = 0
+        num_messages = 1
+
+        topic = 'test_reader_timeout_%s' % time.time()
+        self._send_messages(topic, num_messages, 'sup')
+
+        def handler(msg):
+            time.sleep(1.1)
+            return True
+
+        this = self
+
+        class MockCallback(object):
+
+            def __init__(self):
+                self.was_called = False
+
+            def __call__(self, *args, **kwargs):
+                self.was_called = True
+                this.stop()
+
+        message_timeout_handler = MockCallback()
+
+        r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                   io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+                   msg_timeout=1, message_timeout_handler=message_timeout_handler,
+                   **self.identify_options)
+
+        self.wait()
+        r.close()
+
+        assert message_timeout_handler.was_called
+
+    def test_timeout_not_called_when_message_finishes(self):
+        self.msg_count = 0
+        num_messages = 1
+
+        topic = 'test_reader_timeout_%s' % time.time()
+        self._send_messages(topic, num_messages, 'sup')
+
+        this = self
+
+        class MockCallback(object):
+
+            def __init__(self):
+                self.was_called = False
+
+            def __call__(self, *args, **kwargs):
+                self.was_called = True
+                this.stop()
+                return True
+
+        message_timeout_handler = MockCallback()
+        message_handler = MockCallback()
+
+        r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                   io_loop=self.io_loop, message_handler=message_handler, max_in_flight=100,
+                   msg_timeout=1, message_timeout_handler=message_timeout_handler,
+                   **self.identify_options)
+
+        self.wait()
+        assert message_handler.was_called
+        time.sleep(1.1)
+        assert not message_timeout_handler.was_called
+        r.close()
+
 
 class DeflateReaderIntegrationTest(ReaderIntegrationTest):
 

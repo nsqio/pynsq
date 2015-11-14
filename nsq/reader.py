@@ -184,14 +184,14 @@ class Reader(Client):
             lookupd_http_addresses = []
 
         assert nsqd_tcp_addresses or lookupd_http_addresses
+        if  message_timeout_handler is not None:
+            assert callable(message_timeout_handler), 'message_timeout_handler must be callable'
 
         self.name = name or (topic + ':' + channel)
         self.message_handler = None
         if message_handler:
             self.set_message_handler(message_handler)
-        self.message_timeout_handler = None
-        if message_timeout_handler:
-            self.set_message_timeout_handler(message_timeout_handler)
+        self.message_timeout_handler = message_timeout_handler
         self.topic = topic
         self.channel = channel
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
@@ -281,15 +281,6 @@ class Reader(Client):
         """
         assert callable(message_handler), 'message_handler must be callable'
         self.message_handler = message_handler
-
-    def set_message_timeout_handler(self, message_timeout_handler):
-        """
-        Assigns the callback method to be executed for each message timeout that occurs.
-
-        :param message_timeout_handler: a callable that takes a :class:`nsq.async.AsyncConn` and a :class:`nsq.message.Message`
-        """
-        assert callable(message_timeout_handler), 'message_timeout_handler must be callable'
-        self.message_timeout_handler = message_timeout_handler
 
     def _connection_max_in_flight(self):
         return max(1, self.max_in_flight / max(1, len(self.conns)))

@@ -472,9 +472,6 @@ class AsyncConn(event.EventedMixin):
 
             message = protocol.decode_message(data)
             if self.msg_timeout:
-                if message.id in self.__timeouts:
-                    self.io_loop.remove_timeout(self.__timeouts[message.id])
-
                 self.__timeouts[message.id] = self.io_loop.add_timeout(
                     self.msg_timeout/1000., lambda: self.trigger(event.MESSAGE_TIMEOUT, self, message)
                 )
@@ -482,7 +479,7 @@ class AsyncConn(event.EventedMixin):
             message.on(event.FINISH, self._on_message_finish)
             message.on(event.REQUEUE, self._on_message_requeue)
             message.on(event.TOUCH, self._on_message_touch)
-            message.on(event.TIMEOUT, self._on_message_timeout)
+            message.on(event.MESSAGE_TIMEOUT, self._on_message_timeout)
 
             self.trigger(event.MESSAGE, conn=self, message=message)
         elif frame == protocol.FRAME_TYPE_RESPONSE and data == '_heartbeat_':
