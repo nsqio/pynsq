@@ -6,6 +6,7 @@ import signal
 import subprocess
 import time
 import ssl
+from mock import MagicMock
 
 import tornado.httpclient
 import tornado.testing
@@ -208,18 +209,8 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
             time.sleep(1.1)
             return True
 
-        this = self
-
-        class MockCallback(object):
-
-            def __init__(self):
-                self.was_called = False
-
-            def __call__(self, *args, **kwargs):
-                self.was_called = True
-                this.stop()
-
-        message_timeout_handler = MockCallback()
+        message_timeout_handler = MagicMock()
+        message_timeout_handler.side_effect = lambda c, m: self.stop()
 
         r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
                    io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
@@ -229,7 +220,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         self.wait()
         r.close()
 
-        assert message_timeout_handler.was_called
+        assert message_timeout_handler.called
 
     def test_timeout_not_called_when_message_finishes(self):
         self.msg_count = 0
@@ -238,20 +229,14 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         topic = 'test_reader_timeout_%s' % time.time()
         self._send_messages(topic, num_messages, 'sup')
 
-        this = self
+        def handler(msg):
+            self.stop()
+            return True
 
-        class MockCallback(object):
+        message_timeout_handler = MagicMock()
+        message_handler = MagicMock()
+        message_handler.side_effect = handler
 
-            def __init__(self):
-                self.was_called = False
-
-            def __call__(self, *args, **kwargs):
-                self.was_called = True
-                this.stop()
-                return True
-
-        message_timeout_handler = MockCallback()
-        message_handler = MockCallback()
 
         r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
                    io_loop=self.io_loop, message_handler=message_handler, max_in_flight=100,
@@ -259,9 +244,12 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                    **self.identify_options)
 
         self.wait()
-        assert message_handler.was_called
-        time.sleep(1.1)
-        assert not message_timeout_handler.was_called
+        assert message_handler.called
+        assert not message_timeout_handler.called
+
+        for id, conn in r.conns.items():
+            assert not conn._AsyncConn__timeouts, conn._AsyncConn__timeouts # Indicates no timeouts are standing by
+
         r.close()
 
 
