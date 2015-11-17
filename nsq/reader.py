@@ -316,14 +316,14 @@ class Reader(Client):
         rdy_conn = conn
         if len(self.conns) > self.max_in_flight and time.time() - self.random_rdy_ts > 30:
             # if all connections aren't getting RDY
-            # occsionally randomize which connection gets RDY
+            # occasionally randomize which connection gets RDY
             self.random_rdy_ts = time.time()
             conns_with_no_rdy = [c for c in self.conns.itervalues() if not c.rdy]
             if conns_with_no_rdy:
                 rdy_conn = random.choice(conns_with_no_rdy)
                 if rdy_conn is not conn:
-                    logger.info('[%s:%s] redistributing RDY to %s',
-                                conn.id, self.name, rdy_conn.id)
+                    logger.debug('[%s:%s] redistributing RDY to %s',
+                                     conn.id, self.name, rdy_conn.id)
 
         self._maybe_update_rdy(rdy_conn)
 
@@ -660,7 +660,8 @@ class Reader(Client):
                 logger.debug('[%s:%s] rdy: %d (last message received %.02fs)',
                              conn.id, self.name, conn.rdy, last_message_duration)
                 if conn.rdy > 0 and last_message_duration > self.low_rdy_idle_timeout:
-                    logger.info('[%s:%s] idle connection, giving up RDY count', conn.id, self.name)
+                    logger.debug('[%s:%s] idle connection, giving up RDY count',
+                                                              conn.id, self.name)
                     self._send_rdy(conn, 0)
 
             if backoff_interval:
@@ -679,7 +680,7 @@ class Reader(Client):
             while possible_conns and max_in_flight:
                 max_in_flight -= 1
                 conn = possible_conns.pop(random.randrange(len(possible_conns)))
-                logger.info('[%s:%s] redistributing RDY', conn.id, self.name)
+                logger.debug('[%s:%s] redistributing RDY', conn.id, self.name)
                 self._send_rdy(conn, 1)
 
             # for tests
