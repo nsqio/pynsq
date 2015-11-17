@@ -67,7 +67,7 @@ class Client(object):
             conn.close()
 
     def _on_heartbeat(self, conn):
-        logger.info('[%s:%s] received heartbeat' % (conn.id, self.name))
+        logger.debug('[%s:%s] received heartbeat', conn.id, self.name)
         self.heartbeat(conn)
 
     def heartbeat(self, conn):
