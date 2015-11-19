@@ -141,7 +141,7 @@ class Reader(Client):
             name=None,
             nsqd_tcp_addresses=None,
             lookupd_http_addresses=None,
-            max_tries=5,
+            max_tries=65535,
             max_in_flight=1,
             lookupd_poll_interval=60,
             low_rdy_idle_timeout=10,
@@ -604,12 +604,12 @@ class Reader(Client):
             address = producer.get('broadcast_address', producer.get('address'))
             assert address
             self.connect_to_nsqd(address, producer['tcp_port'])
-    
+
     def set_max_in_flight(self, max_in_flight):
         """dynamically adjust the reader max_in_flight count. Set to 0 to immediately disable a Reader"""
         assert isinstance(max_in_flight, int)
         self.max_in_flight = max_in_flight
-        
+
         if max_in_flight == 0:
             # set RDY 0 to all connections
             for conn in self.conns.itervalues():
@@ -620,8 +620,8 @@ class Reader(Client):
         else:
             self.need_rdy_redistributed = True
             self._redistribute_rdy_state()
-    
-    
+
+
     def _redistribute_rdy_state(self):
         # We redistribute RDY counts in a few cases:
         #
@@ -710,8 +710,8 @@ class Reader(Client):
         """
         logger.warning('[%s] giving up on message %s after %d tries (max:%d) %r',
                        self.name, message.id, message.attempts, self.max_tries, message.body)
-                       
-        
+
+
     def _on_connection_identify_response(self, conn, data, **kwargs):
         if not hasattr(self, '_disabled_notice'):
             self._disabled_notice = True
@@ -725,13 +725,13 @@ class Reader(Client):
                 return map(cast, v.replace('-','.').split('.'))
 
             if self.disabled.__code__ != Reader.disabled.__code__ and semver(data['version']) >= semver('0.3'):
-                logging.warning('disabled() deprecated and incompatible with nsqd >= 0.3. ' + 
+                logging.warning('disabled() deprecated and incompatible with nsqd >= 0.3. ' +
                     'It will be removed in a future release. Use set_max_in_flight(0) instead')
                 warnings.warn('disabled() is deprecated and will be removed in a future release, ' +
                     'use set_max_in_flight(0) instead', DeprecationWarning)
         return super(Reader, self)._on_connection_identify_response(conn, data, **kwargs)
 
-        
+
     @classmethod
     def disabled(cls):
         """
@@ -739,7 +739,7 @@ class Reader(Client):
 
         This is useful to subclass and override to examine a file on disk or a key in cache
         to identify if this reader should pause execution (during a deploy, etc.).
-        
+
         Note: deprecated. Use set_max_in_flight(0)
         """
         return False
