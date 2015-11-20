@@ -82,7 +82,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
 
@@ -92,7 +91,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['snappy'] is True
@@ -119,7 +117,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('ready', _on_ready)
         c.connect()
         response = self.wait()
-        print response
         assert response['conn'] is c
         assert response['data'] == 'OK'
 
@@ -206,11 +203,14 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         self._send_messages(topic, num_messages, 'sup')
 
         def handler(msg):
-            time.sleep(1.1)
-            return True
+            msg.enable_async()
+
+        def mt_handler(conn, msg):
+            assert msg._timed_out
+            self.stop()
 
         message_timeout_handler = MagicMock()
-        message_timeout_handler.side_effect = lambda c, m: self.stop()
+        message_timeout_handler.side_effect = mt_handler
 
         r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
                    io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
@@ -248,7 +248,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         assert not message_timeout_handler.called
 
         for id, conn in r.conns.items():
-            assert not conn._AsyncConn__timeouts, conn._AsyncConn__timeouts # Indicates no timeouts are standing by
+            assert not conn._AsyncConn__message_timeouts, conn._AsyncConn__message_timeouts # Indicates no timeouts are standing by
 
         r.close()
 
@@ -276,7 +276,6 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['deflate'] is True

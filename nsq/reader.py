@@ -313,6 +313,7 @@ class Reader(Client):
 
     def _on_message_timeout(self, conn, message):
         try:
+            message.trigger("message_timeout")
             if self.message_timeout_handler is not None:
                 self.message_timeout_handler(conn, message)
         except Exception:
