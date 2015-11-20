@@ -545,6 +545,6 @@ class AsyncConn(event.EventedMixin):
 
     def _on_message_timeout(self, conn, message):
         message.timed_out = True
-        message.trigger(event.MESSAGE_TIMEOUT, self)
+        message.trigger(event.MESSAGE_TIMEOUT)
         self.__clear_message_timeout(message)
 
