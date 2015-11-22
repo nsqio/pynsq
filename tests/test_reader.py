@@ -206,7 +206,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
             msg.enable_async()
 
         def mt_handler(conn, msg):
-            assert msg._timed_out
+            assert msg.is_in_flight()
             self.stop()
 
         message_timeout_handler = MagicMock()

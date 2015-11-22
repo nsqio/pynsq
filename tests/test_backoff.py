@@ -49,7 +49,7 @@ def _send_message(conn):
 
 
 def _get_message(conn):
-    msg = nsq.Message("1234", "{}", 1234, 0)
+    msg = nsq.Message("1234", "{}", 1234, 0, -1)
     msg.on('finish', conn._on_message_finish)
     msg.on('requeue', conn._on_message_requeue)
     return msg

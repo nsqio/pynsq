@@ -211,6 +211,7 @@ class Reader(Client):
 
         # Verify keyword arguments
         valid_args = inspect.getargspec(async.AsyncConn.__init__)[0]
+        print "Valid args {}".format(valid_args)
         diff = set(kwargs) - set(valid_args)
         assert len(diff) == 0, 'Invalid keyword argument(s): %s' % list(diff)
 
