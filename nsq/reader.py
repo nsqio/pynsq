@@ -146,7 +146,6 @@ class Reader(Client):
             lookupd_http_addresses=None,
             max_tries=5,
             max_in_flight=1,
-            message_timeout_handler=None,
             lookupd_poll_interval=60,
             low_rdy_idle_timeout=10,
             max_backoff_duration=128,
@@ -184,6 +183,8 @@ class Reader(Client):
             lookupd_http_addresses = []
 
         assert nsqd_tcp_addresses or lookupd_http_addresses
+
+        message_timeout_handler = kwargs.get('message_timeout_handler')
         if  message_timeout_handler is not None:
             assert callable(message_timeout_handler), 'message_timeout_handler must be callable'
 

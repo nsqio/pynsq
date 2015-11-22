@@ -61,12 +61,12 @@ def unpack_response(data):
     return frame, data[4:]
 
 
-def decode_message(data):
+def decode_message(data, timeout=None):
     timestamp = struct.unpack('>q', data[:8])[0]
     attempts = struct.unpack('>h', data[8:10])[0]
     id = data[10:26]
     body = data[26:]
-    return Message(id, body, timestamp, attempts)
+    return Message(id, body, timestamp, attempts, timeout)
 
 
 def _command(cmd, body, *params):

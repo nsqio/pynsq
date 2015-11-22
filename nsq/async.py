@@ -145,7 +145,8 @@ class AsyncConn(event.EventedMixin):
             sample_rate=0,
             io_loop=None,
             auth_secret=None,
-            msg_timeout=None):
+            msg_timeout=None,
+            message_timeout_handler=None):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -182,6 +183,7 @@ class AsyncConn(event.EventedMixin):
         self.short_hostname = self.hostname.split('.')[0]
         self.heartbeat_interval = heartbeat_interval * 1000
         self.msg_timeout = int(msg_timeout * 1000) if msg_timeout else None
+        self.message_timeouts_enabled = message_timeout_handler is not None
         self.requeue_delay = requeue_delay
         self.io_loop = io_loop
         if not self.io_loop:
@@ -470,8 +472,8 @@ class AsyncConn(event.EventedMixin):
             self.rdy = max(self.rdy - 1, 0)
             self.in_flight += 1
 
-            message = protocol.decode_message(data)
-            if self.msg_timeout:
+            message = protocol.decode_message(data, timeout=self.msg_timeout)
+            if self.msg_timeout and self.message_timeouts_enabled:
                 self.__set_message_timeout(message)
 
             message.on(event.FINISH, self._on_message_finish)

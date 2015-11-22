@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import time
 from nsq import event
 
 
@@ -48,29 +49,26 @@ class Message(event.EventedMixin):
                     (from the parameter).
     :type attempts: int
     """
-    def __init__(self, id, body, timestamp, attempts):
+    def __init__(self, id, body, timestamp, attempts, timeout):
         self._async_enabled = False
         self._has_responded = False
-        self._timed_out = False
 
         self.id = id
         self.body = body
         self.timestamp = timestamp
         self.attempts = attempts
+        self.timeout = timeout
+        self.created_at = time.time()
 
         super(Message, self).__init__()
-
-        self.on(event.MESSAGE_TIMEOUT, self._on_timeout)
-
-    def _on_timeout(self):
-        self._timed_out = True
 
     def is_in_flight(self):
         """
         Indicates whether or not this :class:`nsq.message.Message` instance is timed out based on the
             msg_timeout parameter as well as whether or not it has been responded to.
         """
-        return not self._timed_out and not self._has_responded
+        timed_out = time.time() - self.created_at > self.timeout
+        return not timed_out and not self._has_responded
 
     def enable_async(self):
         """
