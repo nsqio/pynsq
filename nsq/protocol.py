@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-
 import struct
 import re
 
@@ -10,15 +9,12 @@ except ImportError:
 
 from .message import Message
 
-
 MAGIC_V2 = '  V2'
 NL = '\n'
-
 
 FRAME_TYPE_RESPONSE = 0
 FRAME_TYPE_ERROR = 1
 FRAME_TYPE_MESSAGE = 2
-
 
 # commmands
 AUTH = 'AUTH'
@@ -31,6 +27,7 @@ RDY = 'RDY'
 REQ = 'REQ'  # requeue
 SUB = 'SUB'
 TOUCH = 'TOUCH'
+DPUB = 'DPUB'  # deferred publish
 
 
 class Error(Exception):
@@ -128,6 +125,11 @@ def mpub(topic, data):
     for m in data:
         body += struct.pack('>l', len(m)) + m
     return _command(MPUB, body, topic)
+
+
+def dpub(topic, delay_ms, data):
+    assert isinstance(delay_ms, int), 'dpub delay_ms must be an integer'
+    return _command(DPUB, data, topic, str(delay_ms))
 
 
 VALID_NAME_RE = re.compile(r'^[\.a-zA-Z0-9_-]+(#ephemeral)?$')
