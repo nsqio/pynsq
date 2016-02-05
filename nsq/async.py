@@ -410,6 +410,14 @@ class AsyncConn(event.EventedMixin):
         if data.get('auth_required'):
             self._authentication_required = True
 
+        if data.get('max_rdy_count'):
+            self.max_rdy_count = data.get('max_rdy_count')
+        else:
+            # for backwards compatibility when interacting with older nsqd
+            # (pre 0.2.20), default this to their hard-coded max
+            logger.warn('setting max_rdy_count to default value of 2500')
+            self.max_rdy_count = 2500
+
         self.on(event.RESPONSE, self._on_response_continue)
         self._on_response_continue(conn=self, data=None)
 
