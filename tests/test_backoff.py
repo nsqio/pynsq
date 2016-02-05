@@ -485,3 +485,104 @@ def test_backoff_conns_disconnect():
         for i, call in enumerate(c.stream.write.call_args_list):
             print "%d: %s" % (i, call)
         assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
+
+
+def test_manual_backoff():
+    mock_ioloop = create_autospec(IOLoop)
+    r = _get_reader(mock_ioloop)
+    num_conns = 5
+    conns = []
+    for i in range(num_conns):
+        conn = _get_conn(r)
+        conn.expected_args = ['SUB test test\n', 'RDY 1\n']
+        conn.fails = 0
+        conns.append(conn)
+
+    conn = conns[0]
+
+    msg = _send_message(conn)
+
+    msg.trigger(event.FINISH, message=msg)
+    assert r.backoff_block is False
+    assert r.backoff_timer.get_interval() == 0
+
+    # calling resume() when not backed off should not raise any error
+    r.resume()
+
+    r.backoff()
+
+    # calling backup() when already backed off should not raise any error
+    r.backoff()
+
+    send_args, send_kwargs = conn.stream.write.call_args
+    assert r.backoff_block is True
+    assert send_args[0] == 'RDY 0\n'
+    assert r.backoff_timer.get_interval() == 0, 'manual backoff must not increase backoff timer interval'
+
+    call_arg_count_map = get_call_arg_count_map(conns)
+
+    r.resume()
+
+    assert r.backoff_block is False
+    assert get_ready_counts(conns, call_arg_count_map) == 5, 'resume from manual backoff must send full ready count'
+
+    now = time.time()
+    backoff_duration = 99
+    r.backoff(backoff_duration)
+
+    assert r.backoff_block is True
+    assert mock_ioloop.add_timeout.called
+    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
+    assert are_floats_close(timeout_args[0], now + backoff_duration), \
+        'backoff with duration must use duration that is provided'
+
+    call_arg_count_map = get_call_arg_count_map(conns)
+
+    r.resume()
+
+    # calling resume() when already resumed should not raise any error
+    r.resume()
+
+    assert r.backoff_block is False
+
+    assert get_ready_counts(conns, call_arg_count_map) == 5, \
+        'resume from manual backoff that is called with duration must send full ready count'
+
+    msg = _send_message(conn)
+
+    msg.trigger(event.REQUEUE, message=msg)
+
+    assert r.backoff_block is True
+    assert r.backoff_timer.get_interval() > 0
+
+    r.backoff()
+
+    assert r.backoff_block is True
+    assert r.backoff_timer.get_interval() > 0, 'backoff timer interval should remain the same as before'
+
+    call_arg_count_map = get_call_arg_count_map(conns)
+
+    r.resume()
+
+    assert r.backoff_block is False
+    assert get_ready_counts(conns, call_arg_count_map) == 1, \
+        'resume from manual backoff that is called during an automatic backoff must send 1 ready count'
+
+
+def get_call_arg_count_map(conns):
+    return {c: len(c.stream.write.call_args_list) for c in conns}
+
+
+def get_ready_counts(conns, call_arg_count_map):
+    rdy_count = 0
+    for c in conns:
+        call_arg_list = c.stream.write.call_args_list
+        current_index = call_arg_count_map[c]
+        if current_index < len(call_arg_list) and call_arg_list[current_index][0][0] == 'RDY 1\n':
+            rdy_count += 1
+
+    return rdy_count
+
+
+def are_floats_close(a, b, rel_tol=1e-09, abs_tol=0.0):
+    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)

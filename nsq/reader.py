@@ -212,6 +212,7 @@ class Reader(Client):
         self.backoff_timeout = None
         self.backoff_block = False
         self.backoff_block_completed = True
+        self.backoff_block_existed_before_manual_backoff = False
 
         self.conns = {}
         self.connection_attempts = {}
@@ -415,10 +416,10 @@ class Reader(Client):
         if current_backoff_interval:
             self._start_backoff_block()
 
-    def _start_backoff_block(self):
+    def _start_backoff_block(self, duration=None):
         self.backoff_block = True
         self.backoff_block_completed = False
-        backoff_interval = self.backoff_timer.get_interval()
+        backoff_interval = self.backoff_timer.get_interval() if duration is None else duration
 
         logger.info('[%s] backing off for %0.2f seconds (%d connections)',
                     self.name, backoff_interval, len(self.conns))
@@ -427,6 +428,58 @@ class Reader(Client):
 
         self.backoff_timeout = self.io_loop.add_timeout(time.time() + backoff_interval,
                                                         self._finish_backoff_block)
+
+    def backoff(self, duration=None):
+        """
+        Used to backoff manually
+
+        :param duration: duration of back-off, None if indefinite
+        """
+        if self.backoff_timeout:
+            # already backing off, cancel finishing timeout
+            self.io_loop.remove_timeout(self.backoff_timeout)
+            self.backoff_timeout = None
+            self.backoff_block_existed_before_manual_backoff = True
+
+        if duration is None:
+            # indefinite backoff, call resume() to come out of backoff state
+            self.backoff_block = True
+            self.backoff_block_completed = False
+
+            logger.info('[%s] backing off indefinitely (%d connections)',
+                        self.name, len(self.conns))
+
+            for c in self.conns.values():
+                self._send_rdy(c, 0)
+
+        else:
+            self._start_backoff_block(duration)
+
+    def resume(self):
+        """
+        Used to resume from backoff
+        """
+        if not self.backoff_block:
+            # already resumed, do nothing
+            return
+
+        # clear existing backoff timeout
+        if self.backoff_timeout:
+            self.io_loop.remove_timeout(self.backoff_timeout)
+            self.backoff_timeout = None
+
+        if self.backoff_block_existed_before_manual_backoff:
+            # there was a backoff from failures before manual backoff,
+            # call _finish_backoff_black that was supposed to be called
+            # to safely test the conditions before opening all connections
+            self._finish_backoff_block()
+        else:
+            # there was no backoff from failures, complete this backoff immediately
+            self.backoff_timeout = None
+            self.backoff_block = False
+            self.backoff_block_existed_before_manual_backoff = False
+
+            self._complete_backoff_block()
 
     def _rdy_retry(self, conn, value):
         conn.rdy_timeout = None
