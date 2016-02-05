@@ -329,7 +329,7 @@ class Reader(Client):
 
         success = False
         try:
-            if message.attempts > self.max_tries:
+            if 0 < self.max_tries < message.attempts:
                 self.giving_up(message)
                 return message.finish()
             pre_processed_message = self.preprocess_message(message)
