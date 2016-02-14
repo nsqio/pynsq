@@ -132,7 +132,7 @@ class Writer(Client):
             callback(None, protocol.SendError('no connections'))
             return
 
-        conn = random.choice(self.conns.values())
+        conn = random.choice(list(self.conns.values()))
         conn.callback_queue.append(callback)
         cmd = getattr(protocol, command)
 

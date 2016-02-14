@@ -376,7 +376,7 @@ class Reader(Client):
         if not self.conns or self.max_in_flight == 0:
             return
 
-        conn = random.choice(self.conns.values())
+        conn = random.choice(list(self.conns.values()))
         logger.info('[%s:%s] testing backoff state with RDY 1', conn.id, self.name)
         self._send_rdy(conn, 1)
 
@@ -681,7 +681,7 @@ class Reader(Client):
             # We also don't attempt to avoid the connections who previously might have had RDY 1
             # because it would be overly complicated and not actually worth it (ie. given enough
             # redistribution rounds it doesn't matter).
-            possible_conns = self.conns.values()
+            possible_conns = list(self.conns.values())
             while possible_conns and max_in_flight:
                 max_in_flight -= 1
                 conn = possible_conns.pop(random.randrange(len(possible_conns)))
