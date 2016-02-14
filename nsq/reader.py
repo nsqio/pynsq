@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import division
 
 import logging
 import time
@@ -281,7 +282,7 @@ class Reader(Client):
         self.message_handler = message_handler
 
     def _connection_max_in_flight(self):
-        return max(1, self.max_in_flight / max(1, len(self.conns)))
+        return max(1, self.max_in_flight // max(1, len(self.conns)))
 
     def is_starved(self):
         """
