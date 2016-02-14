@@ -3,10 +3,10 @@ from __future__ import unicode_literals
 
 import time
 import socket
-import struct
 import logging
 
 from ._compat import string_types
+from ._compat import struct_unpack
 from .version import __version__
 
 try:
@@ -261,7 +261,7 @@ class AsyncConn(event.EventedMixin):
 
     def _read_size(self, data):
         try:
-            size = struct.unpack('>l', data)[0]
+            size = struct_unpack('>l', data)[0]
         except Exception:
             self.close()
             self.trigger(

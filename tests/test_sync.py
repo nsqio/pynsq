@@ -1,10 +1,11 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-import struct
 import time
 
 from . import mock_socket
+
+from nsq._compat import struct_pack
 from nsq import protocol, sync
 sync.socket = mock_socket
 
@@ -15,14 +16,14 @@ def mock_write(c, data):
 
 def mock_response_write(c, frame_type, data):
     body_size = 4 + len(data)
-    body_size_packed = struct.pack('>l', body_size)
-    frame_type_packed = struct.pack('>l', frame_type)
+    body_size_packed = struct_pack('>l', body_size)
+    frame_type_packed = struct_pack('>l', frame_type)
     mock_write(c, body_size_packed + frame_type_packed + data)
 
 
 def mock_response_write_message(c, timestamp, attempts, id, body):
-    timestamp_packed = struct.pack('>q', timestamp)
-    attempts_packed = struct.pack('>h', attempts)
+    timestamp_packed = struct_pack('>q', timestamp)
+    attempts_packed = struct_pack('>h', attempts)
     id = b"%016d" % id
     mock_response_write(
         c, protocol.FRAME_TYPE_MESSAGE, timestamp_packed + attempts_packed + id + body)

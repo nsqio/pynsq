@@ -1,5 +1,6 @@
 # flake8: noqa
 
+import struct
 import sys
 
 PY2 = sys.version_info[0] == 2
@@ -27,6 +28,12 @@ if not PY2:
             return x.encode(charset, errors)
         raise TypeError('expected bytes or a string, not %r' % type(x))
 
+    def struct_pack(fmt, *values):
+        return struct.pack(fmt, *values)
+
+    def struct_unpack(fmt, string):
+        return struct.unpack(fmt, string)
+
 else:
     bytes_types = (bytes, bytearray, buffer)
     text_type = unicode
@@ -42,6 +49,15 @@ else:
         if isinstance(x, unicode):
             return x.encode(charset, errors)
         raise TypeError('expected bytes or a string, not %r' % type(x))
+
+    # Python 2.6 has the rather unfortunate problem of raising a TypeError if
+    # you pass a unicode object as the `fmt` parameter. This shim can be
+    # removed when support for Python earlier than 2.7 is dropped.
+    def struct_pack(fmt, *values):
+        return struct.pack(str(fmt), *values)
+
+    def struct_unpack(fmt, string):
+        return struct.unpack(str(fmt), string)
 
 try:
     from urllib import parse as urlparse

@@ -2,9 +2,9 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 
 import socket
-import struct
 
 from nsq._compat import string_types
+from nsq._compat import struct_unpack
 from nsq import protocol
 
 
@@ -35,7 +35,7 @@ class SyncConn(object):
         return data
 
     def read_response(self):
-        size = struct.unpack('>l', self._readn(4))[0]
+        size = struct_unpack('>l', self._readn(4))[0]
         return self._readn(size)
 
     def send(self, data):
