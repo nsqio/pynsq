@@ -2,6 +2,7 @@ language: python
 python:
   - 2.6
   - 2.7
+  - 3.5
 env:
   - NSQ_DOWNLOAD=nsq-0.3.0.linux-amd64.go1.3.3 TORNADO_VERSION=3.2
   - NSQ_DOWNLOAD=nsq-0.3.0.linux-amd64.go1.3.3 TORNADO_VERSION=4.1
