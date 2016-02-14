@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import print_function
 
 import os
 import sys
@@ -81,7 +82,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
 
@@ -91,7 +92,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['snappy'] is True
@@ -118,7 +119,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('ready', _on_ready)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert response['data'] == 'OK'
 
@@ -221,7 +222,7 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
+        print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['deflate'] is True

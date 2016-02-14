@@ -1,6 +1,7 @@
 from __future__ import absolute_import
-
+from __future__ import print_function
 from __future__ import with_statement
+
 import os
 import sys
 import random
@@ -195,7 +196,7 @@ def test_backoff_requeue_recovery():
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
-    print conn.stream.write.call_args_list
+    print(conn.stream.write.call_args_list)
 
     expected_args = [
         'SUB test test\n',
@@ -277,7 +278,7 @@ def test_backoff_hard():
     assert r.backoff_timer.get_interval() == 0
 
     for i, call in enumerate(conn.stream.write.call_args_list):
-        print "%d: %s" % (i, call)
+        print("%d: %s" % (i, call))
     assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
 
 
@@ -336,7 +337,7 @@ def test_backoff_many_conns():
             fail = False
 
     while total_fails:
-        print "%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails)
+        print("%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails))
 
         if not conn.fails:
             # force an idle connection
@@ -376,7 +377,7 @@ def test_backoff_many_conns():
 
     for c in conns:
         for i, call in enumerate(c.stream.write.call_args_list):
-            print "%d: %s" % (i, call)
+            print("%d: %s" % (i, call))
         assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
 
 
@@ -453,7 +454,7 @@ def test_backoff_conns_disconnect():
             fail = False
 
     while total_fails:
-        print "%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails)
+        print("%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails))
 
         msg = _send_message(conn)
 
@@ -483,5 +484,5 @@ def test_backoff_conns_disconnect():
 
     for c in conns:
         for i, call in enumerate(c.stream.write.call_args_list):
-            print "%d: %s" % (i, call)
+            print("%d: %s" % (i, call))
         assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
