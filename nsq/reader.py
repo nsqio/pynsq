@@ -727,7 +727,7 @@ class Reader(Client):
                         return int(x)
                     except:
                         return x
-                return map(cast, v.replace('-','.').split('.'))
+                return [cast(x) for x in v.replace('-','.').split('.')]
 
             if self.disabled.__code__ != Reader.disabled.__code__ and semver(data['version']) >= semver('0.3'):
                 logging.warning('disabled() deprecated and incompatible with nsqd >= 0.3. ' + 
