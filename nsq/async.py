@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import unicode_literals
 
 import time
 import socket
@@ -381,12 +382,12 @@ class AsyncConn(event.EventedMixin):
     def _on_identify_response(self, data, **kwargs):
         self.off(event.RESPONSE, self._on_identify_response)
 
-        if data == 'OK':
+        if data == b'OK':
             logger.warning('nsqd version does not support feature netgotiation')
             return self.trigger(event.READY, conn=self)
 
         try:
-            data = json.loads(data)
+            data = json.loads(data.decode('utf-8'))
         except ValueError:
             self.close()
             self.trigger(
@@ -452,7 +453,7 @@ class AsyncConn(event.EventedMixin):
 
     def _on_auth_response(self, data, **kwargs):
         try:
-            data = json.loads(data)
+            data = json.loads(data.decode('utf-8'))
         except ValueError:
             self.close()
             self.trigger(
@@ -482,7 +483,7 @@ class AsyncConn(event.EventedMixin):
             message.on(event.TOUCH, self._on_message_touch)
 
             self.trigger(event.MESSAGE, conn=self, message=message)
-        elif frame == protocol.FRAME_TYPE_RESPONSE and data == '_heartbeat_':
+        elif frame == protocol.FRAME_TYPE_RESPONSE and data == b'_heartbeat_':
             self.send(protocol.nop())
             self.trigger(event.HEARTBEAT, conn=self)
         elif frame == protocol.FRAME_TYPE_RESPONSE:

@@ -12,6 +12,7 @@ PY2 = sys.version_info[0] == 2
 # that Python 2 is the odd child, and make an exception accordingly.
 
 if not PY2:
+    bytes_types = (bytes, bytearray, memoryview)
     text_type = str
     string_types = (str,)
     integer_types = (int,)
@@ -20,13 +21,14 @@ if not PY2:
     iteritems = lambda d, *args, **kwargs: d.items(*args, **kwargs)
 
     def to_bytes(x, charset='utf-8', errors='strict'):
-        if isinstance(x, (bytes, bytearray, memoryview)):
+        if isinstance(x, bytes_types):
             return bytes(x)
         if isinstance(x, str):
             return x.encode(charset, errors)
         raise TypeError('expected bytes or a string, not %r' % type(x))
 
 else:
+    bytes_types = (bytes, bytearray, buffer)
     text_type = unicode
     string_types = (str, unicode)
     integer_types = (int, long)
@@ -35,7 +37,7 @@ else:
     iteritems = lambda d, *args, **kwargs: d.iteritems(*args, **kwargs)
 
     def to_bytes(x, charset='utf-8', errors='strict'):
-        if isinstance(x, (bytes, bytearray, buffer)):
+        if isinstance(x, bytes_types):
             return bytes(x)
         if isinstance(x, unicode):
             return x.encode(charset, errors)

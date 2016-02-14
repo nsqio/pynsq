@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import unicode_literals
 
 import socket
 import struct
@@ -9,7 +10,7 @@ from nsq import protocol
 
 class SyncConn(object):
     def __init__(self, timeout=1.0):
-        self.buffer = ''
+        self.buffer = b''
         self.timeout = timeout
         self.s = None
 

@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import os
 import sys
@@ -48,7 +49,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         while True:
             try:
                 resp = http.fetch('http://127.0.0.1:4151/ping')
-                if resp.body == 'OK':
+                if resp.body == b'OK':
                     break
                 continue
             except:
@@ -121,7 +122,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         response = self.wait()
         print(response)
         assert response['conn'] is c
-        assert response['data'] == 'OK'
+        assert response['data'] == b'OK'
 
     def _send_messages(self, topic, count, body):
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
@@ -137,7 +138,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         self.msg_count = 0
 
         topic = 'test_conn_suscribe_%s' % time.time()
-        self._send_messages(topic, 5, 'sup')
+        self._send_messages(topic, 5, b'sup')
 
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
                       **self.identify_options)
@@ -163,10 +164,10 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         num_messages = 500
 
         topic = 'test_reader_msgs_%s' % time.time()
-        self._send_messages(topic, num_messages, 'sup')
+        self._send_messages(topic, num_messages, b'sup')
 
         def handler(msg):
-            assert msg.body == 'sup'
+            assert msg.body == b'sup'
             self.msg_count += 1
             if self.msg_count >= num_messages:
                 self.stop()
