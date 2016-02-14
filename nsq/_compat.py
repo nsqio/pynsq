@@ -14,6 +14,7 @@ PY2 = sys.version_info[0] == 2
 if not PY2:
     text_type = str
     string_types = (str,)
+    integer_types = (int,)
 
     itervalues = lambda d, *args, **kwargs: d.values(*args, **kwargs)
     iteritems = lambda d, *args, **kwargs: d.items(*args, **kwargs)
@@ -28,6 +29,7 @@ if not PY2:
 else:
     text_type = unicode
     string_types = (str, unicode)
+    integer_types = (int, long)
 
     itervalues = lambda d, *args, **kwargs: d.itervalues(*args, **kwargs)
     iteritems = lambda d, *args, **kwargs: d.iteritems(*args, **kwargs)

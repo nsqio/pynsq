@@ -16,6 +16,7 @@ except ImportError:
 from tornado.ioloop import PeriodicCallback
 import tornado.httpclient
 
+from ._compat import integer_types
 from ._compat import iteritems
 from ._compat import itervalues
 from ._compat import string_types
@@ -762,7 +763,7 @@ def _utf8_params(params):
     for k, v in params.items():
         if v is None:
             continue
-        if isinstance(v, (int, long, float)):
+        if isinstance(v, integer_types + (float,)):
             v = str(v)
         if isinstance(v, (list, tuple)):
             v = [to_bytes(x) for x in v]
