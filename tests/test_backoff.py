@@ -8,7 +8,7 @@ import sys
 import random
 import time
 
-from mock import patch, create_autospec
+from mock import call, patch, create_autospec
 from tornado.ioloop import IOLoop
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
@@ -35,6 +35,12 @@ def _get_reader(io_loop=None, max_in_flight=5):
                       io_loop=io_loop)
 
 
+def _get_ioloop():
+    ioloop = create_autospec(IOLoop)
+    ioloop.time.return_value = 0
+    return ioloop
+
+
 def _get_conn(reader):
     global _conn_port
     with patch('nsq.async.tornado.iostream.IOStream', autospec=True):
@@ -58,7 +64,7 @@ def _get_message(conn):
 
 
 def test_backoff_easy():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(mock_ioloop)
     conn = _get_conn(r)
 
@@ -98,11 +104,11 @@ def test_backoff_easy():
         b'RDY 5\n',
         b'FIN 1234\n'
     ]
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
 def test_backoff_out_of_order():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(mock_ioloop, max_in_flight=4)
     conn1 = _get_conn(r)
     conn2 = _get_conn(r)
@@ -141,7 +147,7 @@ def test_backoff_out_of_order():
         b'FIN 1234\n',
         b'RDY 2\n',
     ]
-    assert conn1.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn1.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
     expected_args = [
         b'SUB test test\n',
@@ -149,11 +155,11 @@ def test_backoff_out_of_order():
         b'RDY 0\n',
         b'RDY 2\n'
     ]
-    assert conn2.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn2.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
 def test_backoff_requeue_recovery():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(mock_ioloop, max_in_flight=2)
     conn = _get_conn(r)
     msg = _send_message(conn)
@@ -213,11 +219,11 @@ def test_backoff_requeue_recovery():
         b'RDY 2\n',
         b'FIN 1234\n'
     ]
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
 def test_backoff_hard():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
     conn = _get_conn(r)
 
@@ -280,11 +286,11 @@ def test_backoff_hard():
 
     for i, call in enumerate(conn.stream.write.call_args_list):
         print("%d: %s" % (i, call))
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
 def test_backoff_many_conns():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
 
     num_conns = 5
@@ -379,11 +385,11 @@ def test_backoff_many_conns():
     for c in conns:
         for i, call in enumerate(c.stream.write.call_args_list):
             print("%d: %s" % (i, call))
-        assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
+        assert c.stream.write.call_args_list == [call(arg) for arg in c.expected_args]
 
 
 def test_backoff_conns_disconnect():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
 
     num_conns = 5
@@ -486,4 +492,4 @@ def test_backoff_conns_disconnect():
     for c in conns:
         for i, call in enumerate(c.stream.write.call_args_list):
             print("%d: %s" % (i, call))
-        assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
+        assert c.stream.write.call_args_list == [call(arg) for arg in c.expected_args]
