@@ -16,6 +16,8 @@ except ImportError:
 from tornado.ioloop import PeriodicCallback
 import tornado.httpclient
 
+from ._compat import iteritems
+from ._compat import itervalues
 from ._compat import string_types
 from ._compat import to_bytes
 from ._compat import urlencode
@@ -301,7 +303,7 @@ class Reader(Client):
             reader.set_message_handler(functools.partial(message_handler, reader=reader))
             nsq.run()
         """
-        for conn in self.conns.itervalues():
+        for conn in itervalues(self.conns):
             if conn.in_flight > 0 and conn.in_flight >= (conn.last_rdy * 0.85):
                 return True
         return False
@@ -320,7 +322,7 @@ class Reader(Client):
             # if all connections aren't getting RDY
             # occsionally randomize which connection gets RDY
             self.random_rdy_ts = time.time()
-            conns_with_no_rdy = [c for c in self.conns.itervalues() if not c.rdy]
+            conns_with_no_rdy = [c for c in itervalues(self.conns) if not c.rdy]
             if conns_with_no_rdy:
                 rdy_conn = random.choice(conns_with_no_rdy)
                 if rdy_conn is not conn:
@@ -614,7 +616,7 @@ class Reader(Client):
         
         if max_in_flight == 0:
             # set RDY 0 to all connections
-            for conn in self.conns.itervalues():
+            for conn in itervalues(self.conns):
                 if conn.rdy > 0:
                     logger.debug('[%s:%s] rdy: %d -> 0', conn.id, self.name, conn.rdy)
                     self._send_rdy(conn, 0)
@@ -657,7 +659,7 @@ class Reader(Client):
 
             # first set RDY 0 to all connections that have not received a message within
             # a configurable timeframe (low_rdy_idle_timeout).
-            for conn_id, conn in self.conns.iteritems():
+            for conn_id, conn in iteritems(self.conns):
                 last_message_duration = time.time() - conn.last_msg_timestamp
                 logger.debug('[%s:%s] rdy: %d (last message received %.02fs)',
                              conn.id, self.name, conn.rdy, last_message_duration)

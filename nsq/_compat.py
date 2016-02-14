@@ -15,6 +15,9 @@ if not PY2:
     text_type = str
     string_types = (str,)
 
+    itervalues = lambda d, *args, **kwargs: d.values(*args, **kwargs)
+    iteritems = lambda d, *args, **kwargs: d.items(*args, **kwargs)
+
     def to_bytes(x, charset='utf-8', errors='strict'):
         if isinstance(x, (bytes, bytearray, memoryview)):
             return bytes(x)
@@ -25,6 +28,9 @@ if not PY2:
 else:
     text_type = unicode
     string_types = (str, unicode)
+
+    itervalues = lambda d, *args, **kwargs: d.itervalues(*args, **kwargs)
+    iteritems = lambda d, *args, **kwargs: d.iteritems(*args, **kwargs)
 
     def to_bytes(x, charset='utf-8', errors='strict'):
         if isinstance(x, (bytes, bytearray, buffer)):
