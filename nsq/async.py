@@ -5,6 +5,7 @@ import socket
 import struct
 import logging
 
+from ._compat import string_types
 from .version import __version__
 
 try:
@@ -146,7 +147,7 @@ class AsyncConn(event.EventedMixin):
             io_loop=None,
             auth_secret=None,
             msg_timeout=None):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, string_types)
         assert isinstance(port, int)
         assert isinstance(timeout, float)
         assert isinstance(tls_options, (dict, None.__class__))
@@ -156,7 +157,7 @@ class AsyncConn(event.EventedMixin):
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
-        assert isinstance(auth_secret, (str, unicode, None.__class__))
+        assert isinstance(auth_secret, string_types + (None.__class__,))
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
         assert msg_timeout is None or (isinstance(msg_timeout, (float, int)) and msg_timeout > 0)

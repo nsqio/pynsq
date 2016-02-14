@@ -7,6 +7,7 @@ import functools
 import random
 import inspect
 
+from ._compat import string_types
 from .client import Client
 from nsq import protocol
 from . import async
@@ -86,7 +87,7 @@ class Writer(Client):
         super(Writer, self).__init__(**kwargs)
 
         if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
-            assert isinstance(nsqd_tcp_addresses, (str, unicode))
+            assert isinstance(nsqd_tcp_addresses, string_types)
             nsqd_tcp_addresses = [nsqd_tcp_addresses]
         assert nsqd_tcp_addresses
 
@@ -113,7 +114,7 @@ class Writer(Client):
         self._pub('pub', topic, msg, callback=callback)
 
     def mpub(self, topic, msg, callback=None):
-        if isinstance(msg, (str, unicode)):
+        if isinstance(msg, string_types):
             msg = [msg]
         assert isinstance(msg, (list, set, tuple))
 
@@ -163,7 +164,7 @@ class Writer(Client):
             self.connect_to_nsqd(host, int(port))
 
     def connect_to_nsqd(self, host, port):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, string_types)
         assert isinstance(port, int)
 
         conn = async.AsyncConn(host, port, **self.conn_kwargs)

@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import socket
 import struct
 
+from nsq._compat import string_types
 from nsq import protocol
 
 
@@ -13,7 +14,7 @@ class SyncConn(object):
         self.s = None
 
     def connect(self, host, port):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, string_types)
         assert isinstance(port, int)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.settimeout(self.timeout)

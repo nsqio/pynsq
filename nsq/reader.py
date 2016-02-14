@@ -18,6 +18,8 @@ except ImportError:
 from tornado.ioloop import PeriodicCallback
 import tornado.httpclient
 
+from ._compat import string_types
+from ._compat import to_bytes
 from .backoff_timer import BackoffTimer
 from .client import Client
 from . import protocol
@@ -152,11 +154,11 @@ class Reader(Client):
             **kwargs):
         super(Reader, self).__init__(**kwargs)
 
-        assert isinstance(topic, (str, unicode)) and len(topic) > 0
-        assert isinstance(channel, (str, unicode)) and len(channel) > 0
+        assert isinstance(topic, string_types) and len(topic) > 0
+        assert isinstance(channel, string_types) and len(channel) > 0
         assert isinstance(max_in_flight, int) and max_in_flight > 0
         assert isinstance(max_backoff_duration, (int, float)) and max_backoff_duration > 0
-        assert isinstance(name, (str, unicode, None.__class__))
+        assert isinstance(name, string_types + (None.__class__,))
         assert isinstance(lookupd_poll_interval, int)
         assert isinstance(lookupd_poll_jitter, float)
         assert isinstance(lookupd_connect_timeout, int)
@@ -166,14 +168,14 @@ class Reader(Client):
 
         if nsqd_tcp_addresses:
             if not isinstance(nsqd_tcp_addresses, (list, set, tuple)):
-                assert isinstance(nsqd_tcp_addresses, (str, unicode))
+                assert isinstance(nsqd_tcp_addresses, string_types)
                 nsqd_tcp_addresses = [nsqd_tcp_addresses]
         else:
             nsqd_tcp_addresses = []
 
         if lookupd_http_addresses:
             if not isinstance(lookupd_http_addresses, (list, set, tuple)):
-                assert isinstance(lookupd_http_addresses, (str, unicode))
+                assert isinstance(lookupd_http_addresses, string_types)
                 lookupd_http_addresses = [lookupd_http_addresses]
             random.shuffle(lookupd_http_addresses)
         else:
@@ -464,7 +466,7 @@ class Reader(Client):
         :param host: the address to connect to
         :param port: the port to connect to
         """
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, string_types)
         assert isinstance(port, int)
 
         conn = async.AsyncConn(host, port, **self.conn_kwargs)
@@ -761,16 +763,8 @@ def _utf8_params(params):
         if isinstance(v, (int, long, float)):
             v = str(v)
         if isinstance(v, (list, tuple)):
-            v = [_utf8(x) for x in v]
+            v = [to_bytes(x) for x in v]
         else:
-            v = _utf8(v)
+            v = to_bytes(v)
         encoded_params.append((k, v))
     return dict(encoded_params)
-
-
-def _utf8(s):
-    """encode a unicode string as utf-8"""
-    if isinstance(s, unicode):
-        return s.encode("utf-8")
-    assert isinstance(s, str), "_utf8 expected a str, not %r" % type(s)
-    return s
