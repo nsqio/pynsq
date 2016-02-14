@@ -336,7 +336,7 @@ class AsyncConn(event.EventedMixin):
     def send_rdy(self, value):
         try:
             self.send(protocol.ready(value))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(
                 event.ERROR,
@@ -369,7 +369,7 @@ class AsyncConn(event.EventedMixin):
         self.on(event.RESPONSE, self._on_identify_response)
         try:
             self.send(protocol.identify(identify_data))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(
                 event.ERROR,
@@ -439,7 +439,7 @@ class AsyncConn(event.EventedMixin):
             self.trigger(event.AUTH, conn=self, data=self.auth_secret)
             try:
                 self.send(protocol.auth(self.auth_secret))
-            except Exception, e:
+            except Exception as e:
                 self.close()
                 self.trigger(
                     event.ERROR,
@@ -499,7 +499,7 @@ class AsyncConn(event.EventedMixin):
         try:
             time_ms = self.requeue_delay * message.attempts * 1000 if time_ms < 0 else time_ms
             self.send(protocol.requeue(message.id, time_ms))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(event.ERROR, conn=self, error=protocol.SendError(
                 'failed to send REQ %s @ %d' % (message.id, time_ms), e))
@@ -510,7 +510,7 @@ class AsyncConn(event.EventedMixin):
         self.in_flight -= 1
         try:
             self.send(protocol.finish(message.id))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(
                 event.ERROR,
@@ -521,7 +521,7 @@ class AsyncConn(event.EventedMixin):
     def _on_message_touch(self, message, **kwargs):
         try:
             self.send(protocol.touch(message.id))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(
                 event.ERROR,
