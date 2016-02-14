@@ -32,3 +32,10 @@ else:
         if isinstance(x, unicode):
             return x.encode(charset, errors)
         raise TypeError('expected bytes or a string, not %r' % type(x))
+
+try:
+    from urllib import parse as urlparse
+    from urllib.parse import urlencode
+except ImportError:
+    import urlparse
+    from urllib import urlencode

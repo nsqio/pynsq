@@ -3,9 +3,7 @@ from __future__ import absolute_import
 import logging
 import time
 import functools
-import urllib
 import random
-import urlparse
 import cgi
 import warnings
 import inspect
@@ -20,6 +18,8 @@ import tornado.httpclient
 
 from ._compat import string_types
 from ._compat import to_bytes
+from ._compat import urlencode
+from ._compat import urlparse
 from .backoff_timer import BackoffTimer
 from .client import Client
 from . import protocol
@@ -573,7 +573,7 @@ class Reader(Client):
 
         params = cgi.parse_qs(query)
         params['topic'] = self.topic
-        query = urllib.urlencode(_utf8_params(params), doseq=1)
+        query = urlencode(_utf8_params(params), doseq=1)
         lookupd_url = urlparse.urlunsplit((scheme, netloc, path, query, fragment))
 
         req = tornado.httpclient.HTTPRequest(
