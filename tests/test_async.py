@@ -29,7 +29,12 @@ def _get_test_conn(io_loop=None):
     return conn
 
 
-@patch('nsq.async.socket', autospec=True)
+# We'd like to autospec the socket mock here, but due to a bug in mock on
+# Python 2.x, we can't currently do that. See:
+#
+#   https://github.com/testing-cabal/mock/issues/323
+#
+@patch('nsq.async.socket')
 @patch('nsq.async.tornado.iostream.IOStream', autospec=True)
 def test_connect(mock_iostream, mock_socket):
     conn = _get_test_conn()
