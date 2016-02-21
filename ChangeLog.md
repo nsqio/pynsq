@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.9 - 2016-02-21
+
+ * #139 - support `DPUB` (thanks @iameugenejo)
+ * #142 - allow infinite attempts (thanks @iameugenejo)
+ * #146 - fix regression in max_rdy_count from `nsqd` (thanks @klucar)
+ * #148/#147 - test fixes (thanks @nickstenning)
+
 ## 0.6.8 - 2015-09-18
 
  * #129 - fix Snappy `uncompressed` declaration
