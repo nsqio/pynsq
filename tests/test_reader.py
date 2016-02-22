@@ -6,6 +6,7 @@ import signal
 import subprocess
 import time
 import ssl
+from mock import MagicMock
 
 import tornado.httpclient
 import tornado.testing
@@ -81,7 +82,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
 
@@ -91,7 +91,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['snappy'] is True
@@ -118,7 +117,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         c.on('ready', _on_ready)
         c.connect()
         response = self.wait()
-        print response
         assert response['conn'] is c
         assert response['data'] == 'OK'
 
@@ -197,6 +195,63 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
                         heartbeat_interval=1)
         self.wait()
 
+    def test_timeout_propagates_to_reader(self):
+        self.msg_count = 0
+        num_messages = 1
+
+        topic = 'test_reader_timeout_%s' % time.time()
+        self._send_messages(topic, num_messages, 'sup')
+
+        def handler(msg):
+            msg.enable_async()
+
+        def mt_handler(conn, msg):
+            assert msg.is_in_flight()
+            self.stop()
+
+        message_timeout_handler = MagicMock()
+        message_timeout_handler.side_effect = mt_handler
+
+        r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                   io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+                   msg_timeout=1, message_timeout_handler=message_timeout_handler,
+                   **self.identify_options)
+
+        self.wait()
+        r.close()
+
+        assert message_timeout_handler.called
+
+    def test_timeout_not_called_when_message_finishes(self):
+        self.msg_count = 0
+        num_messages = 1
+
+        topic = 'test_reader_timeout_%s' % time.time()
+        self._send_messages(topic, num_messages, 'sup')
+
+        def handler(msg):
+            self.stop()
+            return True
+
+        message_timeout_handler = MagicMock()
+        message_handler = MagicMock()
+        message_handler.side_effect = handler
+
+
+        r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                   io_loop=self.io_loop, message_handler=message_handler, max_in_flight=100,
+                   msg_timeout=1, message_timeout_handler=message_timeout_handler,
+                   **self.identify_options)
+
+        self.wait()
+        assert message_handler.called
+        assert not message_timeout_handler.called
+
+        for id, conn in r.conns.items():
+            assert not conn._AsyncConn__message_timeouts, conn._AsyncConn__message_timeouts # Indicates no timeouts are standing by
+
+        r.close()
+
 
 class DeflateReaderIntegrationTest(ReaderIntegrationTest):
 
@@ -221,7 +276,6 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
-        print response
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['deflate'] is True

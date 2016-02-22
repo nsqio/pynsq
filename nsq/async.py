@@ -145,7 +145,8 @@ class AsyncConn(event.EventedMixin):
             sample_rate=0,
             io_loop=None,
             auth_secret=None,
-            msg_timeout=None):
+            msg_timeout=None,
+            message_timeout_handler=None):
         assert isinstance(host, (str, unicode))
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -182,6 +183,7 @@ class AsyncConn(event.EventedMixin):
         self.short_hostname = self.hostname.split('.')[0]
         self.heartbeat_interval = heartbeat_interval * 1000
         self.msg_timeout = int(msg_timeout * 1000) if msg_timeout else None
+        self.message_timeouts_enabled = message_timeout_handler is not None
         self.requeue_delay = requeue_delay
         self.io_loop = io_loop
         if not self.io_loop:
@@ -203,6 +205,7 @@ class AsyncConn(event.EventedMixin):
         self.rdy = 0
 
         self.callback_queue = []
+        self.__message_timeouts = {}
 
         super(AsyncConn, self).__init__()
 
@@ -386,6 +389,8 @@ class AsyncConn(event.EventedMixin):
 
         try:
             data = json.loads(data)
+            if self.msg_timeout is None:
+                self.msg_timeout = data.get('msg_timeout')
         except ValueError:
             self.close()
             self.trigger(
@@ -430,7 +435,7 @@ class AsyncConn(event.EventedMixin):
                 self.upgrade_to_snappy()
             elif feature == 'deflate':
                 self.upgrade_to_deflate()
-            # the server will 'OK' after these conneciton upgrades triggering another response
+            # the server will 'OK' after these connection upgrades triggering another response
             return
 
         self.off(event.RESPONSE, self._on_response_continue)
@@ -475,7 +480,10 @@ class AsyncConn(event.EventedMixin):
             self.rdy = max(self.rdy - 1, 0)
             self.in_flight += 1
 
-            message = protocol.decode_message(data)
+            message = protocol.decode_message(data, timeout=self.msg_timeout)
+            if self.msg_timeout and self.message_timeouts_enabled:
+                self.__set_message_timeout(message)
+
             message.on(event.FINISH, self._on_message_finish)
             message.on(event.REQUEUE, self._on_message_requeue)
             message.on(event.TOUCH, self._on_message_touch)
@@ -499,6 +507,7 @@ class AsyncConn(event.EventedMixin):
         try:
             time_ms = self.requeue_delay * message.attempts * 1000 if time_ms < 0 else time_ms
             self.send(protocol.requeue(message.id, time_ms))
+            self.__clear_message_timeout(message)
         except Exception, e:
             self.close()
             self.trigger(event.ERROR, conn=self, error=protocol.SendError(
@@ -510,6 +519,7 @@ class AsyncConn(event.EventedMixin):
         self.in_flight -= 1
         try:
             self.send(protocol.finish(message.id))
+            self.__clear_message_timeout(message)
         except Exception, e:
             self.close()
             self.trigger(
@@ -521,6 +531,7 @@ class AsyncConn(event.EventedMixin):
     def _on_message_touch(self, message, **kwargs):
         try:
             self.send(protocol.touch(message.id))
+            self.__set_message_timeout(message)
         except Exception, e:
             self.close()
             self.trigger(
@@ -528,3 +539,19 @@ class AsyncConn(event.EventedMixin):
                 conn=self,
                 error=protocol.SendError('failed to send TOUCH %s' % message.id, e),
             )
+
+    def __clear_message_timeout(self, message):
+        if message.id in self.__message_timeouts:
+            timeout = self.__message_timeouts[message.id]
+            self.io_loop.remove_timeout(timeout)
+            del self.__message_timeouts[message.id]
+
+    def __set_message_timeout(self, message):
+        self.__clear_message_timeout(message)
+        self.__message_timeouts[message.id] = self.io_loop.add_timeout(
+            float(self.msg_timeout)/1000.,
+            lambda: self.trigger(event.MESSAGE_TIMEOUT, self, message))
+
+    def _on_message_timeout(self, conn, message):
+        self.__clear_message_timeout(message)
+

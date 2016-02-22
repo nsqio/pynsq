@@ -112,6 +112,9 @@ class Reader(Client):
     :param max_in_flight: the maximum number of messages this reader will pipeline for processing.
         this value will be divided evenly amongst the configured/discovered nsqd producers
 
+    :param message_timeout_handler: A callable that runs when a message times out. The parameters are
+        the AsyncConn used by the client and the message itself.
+
     :param lookupd_poll_interval: the amount of time in seconds between querying all of the supplied
         nsqlookupd instances.  a random amount of time based on thie value will be initially
         introduced in order to add jitter when multiple readers are running
@@ -181,10 +184,15 @@ class Reader(Client):
 
         assert nsqd_tcp_addresses or lookupd_http_addresses
 
+        message_timeout_handler = kwargs.get('message_timeout_handler')
+        if  message_timeout_handler is not None:
+            assert callable(message_timeout_handler), 'message_timeout_handler must be callable'
+
         self.name = name or (topic + ':' + channel)
         self.message_handler = None
         if message_handler:
             self.set_message_handler(message_handler)
+        self.message_timeout_handler = message_timeout_handler
         self.topic = topic
         self.channel = channel
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
@@ -303,6 +311,13 @@ class Reader(Client):
             if conn.in_flight > 0 and conn.in_flight >= (conn.last_rdy * 0.85):
                 return True
         return False
+
+    def _on_message_timeout(self, conn, message):
+        try:
+            if self.message_timeout_handler is not None:
+                self.message_timeout_handler(conn, message)
+        except Exception:
+            logger.exception('[%s:%s] failed to handle_message_timeout() %r', conn.id, self.name, message)
 
     def _on_message(self, conn, message, **kwargs):
         try:
@@ -476,6 +491,7 @@ class Reader(Client):
         conn.on('close', self._on_connection_close)
         conn.on('ready', self._on_connection_ready)
         conn.on('message', self._on_message)
+        conn.on('message_timeout', self._on_message_timeout)
         conn.on('heartbeat', self._on_heartbeat)
         conn.on('backoff', functools.partial(self._on_backoff_resume, success=False))
         conn.on('resume', functools.partial(self._on_backoff_resume, success=True))
