@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 - 2016-07-09
+
+ * #150 - Python 3 support (thanks @nickstenning et. al)
+ * #156 - optimize backoff timer (thanks @ploxiln)
+ * #157 - reuse protocol struct objects (thanks @virtuald)
+ * #158 - optimistically schedule next ioloop read (thanks @virtuald)
+
 ## 0.6.9 - 2016-02-21
 
  * #139 - support `DPUB` (thanks @iameugenejo)
