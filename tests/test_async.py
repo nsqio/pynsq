@@ -4,7 +4,6 @@ from __future__ import with_statement
 import os
 import sys
 
-import struct
 from mock import patch, create_autospec, MagicMock
 from tornado.iostream import IOStream
 
@@ -13,6 +12,7 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
+from nsq._compat import struct_pack
 from nsq.async import AsyncConn
 from nsq import protocol
 
@@ -80,7 +80,7 @@ def test_start_read():
 def test_read_size():
     conn = _get_test_conn()
     body_size = 6
-    body_size_packed = struct.pack('>l', body_size)
+    body_size_packed = struct_pack('>l', body_size)
     conn._read_size(body_size_packed)
     conn.stream.read_bytes.assert_called_once_with(body_size, conn._read_body)
 

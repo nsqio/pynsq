@@ -1,12 +1,14 @@
 from __future__ import absolute_import
-
+from __future__ import print_function
 from __future__ import with_statement
+from __future__ import unicode_literals
+
 import os
 import sys
 import random
 import time
 
-from mock import patch, create_autospec
+from mock import call, patch, create_autospec
 from tornado.ioloop import IOLoop
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
@@ -33,6 +35,12 @@ def _get_reader(io_loop=None, max_in_flight=5):
                       io_loop=io_loop)
 
 
+def _get_ioloop():
+    ioloop = create_autospec(IOLoop)
+    ioloop.time.return_value = 0
+    return ioloop
+
+
 def _get_conn(reader):
     global _conn_port
     with patch('nsq.async.tornado.iostream.IOStream', autospec=True):
@@ -56,7 +64,7 @@ def _get_message(conn):
 
 
 def test_backoff_easy():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(mock_ioloop)
     conn = _get_conn(r)
 
@@ -77,7 +85,7 @@ def test_backoff_easy():
     timeout_args[1]()
     assert r.backoff_block is False
     send_args, send_kwargs = conn.stream.write.call_args
-    assert send_args[0] == 'RDY 1\n'
+    assert send_args[0] == b'RDY 1\n'
 
     msg = _send_message(conn)
 
@@ -86,21 +94,21 @@ def test_backoff_easy():
     assert r.backoff_timer.get_interval() == 0
 
     expected_args = [
-        'SUB test test\n',
-        'RDY 1\n',
-        'RDY 5\n',
-        'FIN 1234\n',
-        'RDY 0\n',
-        'REQ 1234 0\n',
-        'RDY 1\n',
-        'RDY 5\n',
-        'FIN 1234\n'
+        b'SUB test test\n',
+        b'RDY 1\n',
+        b'RDY 5\n',
+        b'FIN 1234\n',
+        b'RDY 0\n',
+        b'REQ 1234 0\n',
+        b'RDY 1\n',
+        b'RDY 5\n',
+        b'FIN 1234\n'
     ]
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
 def test_backoff_out_of_order():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(mock_ioloop, max_in_flight=4)
     conn1 = _get_conn(r)
     conn2 = _get_conn(r)
@@ -130,28 +138,28 @@ def test_backoff_out_of_order():
     assert r.backoff_timer.get_interval() == 0
 
     expected_args = [
-        'SUB test test\n',
-        'RDY 1\n',
-        'RDY 2\n',
-        'FIN 1234\n',
-        'RDY 0\n',
-        'REQ 1234 0\n',
-        'FIN 1234\n',
-        'RDY 2\n',
+        b'SUB test test\n',
+        b'RDY 1\n',
+        b'RDY 2\n',
+        b'FIN 1234\n',
+        b'RDY 0\n',
+        b'REQ 1234 0\n',
+        b'FIN 1234\n',
+        b'RDY 2\n',
     ]
-    assert conn1.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn1.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
     expected_args = [
-        'SUB test test\n',
-        'RDY 1\n',
-        'RDY 0\n',
-        'RDY 2\n'
+        b'SUB test test\n',
+        b'RDY 1\n',
+        b'RDY 0\n',
+        b'RDY 2\n'
     ]
-    assert conn2.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn2.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
 def test_backoff_requeue_recovery():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(mock_ioloop, max_in_flight=2)
     conn = _get_conn(r)
     msg = _send_message(conn)
@@ -195,31 +203,31 @@ def test_backoff_requeue_recovery():
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
-    print conn.stream.write.call_args_list
+    print(conn.stream.write.call_args_list)
 
     expected_args = [
-        'SUB test test\n',
-        'RDY 1\n',
-        'RDY 2\n',
-        'FIN 1234\n',
-        'RDY 0\n',
-        'REQ 1234 0\n',
-        'RDY 1\n',
-        'RDY 0\n',
-        'REQ 1234 0\n',
-        'RDY 1\n',
-        'RDY 2\n',
-        'FIN 1234\n'
+        b'SUB test test\n',
+        b'RDY 1\n',
+        b'RDY 2\n',
+        b'FIN 1234\n',
+        b'RDY 0\n',
+        b'REQ 1234 0\n',
+        b'RDY 1\n',
+        b'RDY 0\n',
+        b'REQ 1234 0\n',
+        b'RDY 1\n',
+        b'RDY 2\n',
+        b'FIN 1234\n'
     ]
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+    assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
 def test_backoff_hard():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
     conn = _get_conn(r)
 
-    expected_args = ['SUB test test\n', 'RDY 1\n', 'RDY 5\n']
+    expected_args = [b'SUB test test\n', b'RDY 1\n', b'RDY 5\n']
 
     num_fails = 0
     fail = True
@@ -231,14 +239,14 @@ def test_backoff_hard():
             msg.trigger(event.REQUEUE, message=msg)
             num_fails += 1
 
-            expected_args.append('RDY 0\n')
-            expected_args.append('REQ 1234 0\n')
+            expected_args.append(b'RDY 0\n')
+            expected_args.append(b'REQ 1234 0\n')
         else:
             msg.trigger(event.FINISH, message=msg)
             num_fails -= 1
 
-            expected_args.append('RDY 0\n')
-            expected_args.append('FIN 1234\n')
+            expected_args.append(b'RDY 0\n')
+            expected_args.append(b'FIN 1234\n')
 
         assert r.backoff_block is True
         assert r.backoff_timer.get_interval() > 0
@@ -249,7 +257,7 @@ def test_backoff_hard():
             timeout_args[1]()
             last_timeout_time = timeout_args[0]
         assert r.backoff_block is False
-        expected_args.append('RDY 1\n')
+        expected_args.append(b'RDY 1\n')
 
         fail = True
         if random.random() < 0.3 and num_fails > 1:
@@ -259,37 +267,37 @@ def test_backoff_hard():
         msg = _send_message(conn)
 
         msg.trigger(event.FINISH, message=msg)
-        expected_args.append('RDY 0\n')
-        expected_args.append('FIN 1234\n')
+        expected_args.append(b'RDY 0\n')
+        expected_args.append(b'FIN 1234\n')
         timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
             timeout_args[1]()
             last_timeout_time = timeout_args[0]
-        expected_args.append('RDY 1\n')
+        expected_args.append(b'RDY 1\n')
 
     msg = _send_message(conn)
 
     msg.trigger(event.FINISH, message=msg)
-    expected_args.append('RDY 5\n')
-    expected_args.append('FIN 1234\n')
+    expected_args.append(b'RDY 5\n')
+    expected_args.append(b'FIN 1234\n')
 
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
     for i, call in enumerate(conn.stream.write.call_args_list):
-        print "%d: %s" % (i, call)
-    assert conn.stream.write.call_args_list == [((arg,),) for arg in expected_args]
+        print("%d: %s" % (i, call))
+    assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
 def test_backoff_many_conns():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
 
     num_conns = 5
     conns = []
     for i in range(num_conns):
         conn = _get_conn(r)
-        conn.expected_args = ['SUB test test\n', 'RDY 1\n']
+        conn.expected_args = [b'SUB test test\n', b'RDY 1\n']
         conn.fails = 0
         conns.append(conn)
 
@@ -301,7 +309,7 @@ def test_backoff_many_conns():
         msg = _send_message(conn)
 
         if r.backoff_timer.get_interval() == 0:
-            conn.expected_args.append('RDY 1\n')
+            conn.expected_args.append(b'RDY 1\n')
 
         if fail or not conn.fails:
             msg.trigger(event.REQUEUE, message=msg)
@@ -309,16 +317,16 @@ def test_backoff_many_conns():
             conn.fails += 1
 
             for c in conns:
-                c.expected_args.append('RDY 0\n')
-            conn.expected_args.append('REQ 1234 0\n')
+                c.expected_args.append(b'RDY 0\n')
+            conn.expected_args.append(b'REQ 1234 0\n')
         else:
             msg.trigger(event.FINISH, message=msg)
             total_fails -= 1
             conn.fails -= 1
 
             for c in conns:
-                c.expected_args.append('RDY 0\n')
-            conn.expected_args.append('FIN 1234\n')
+                c.expected_args.append(b'RDY 0\n')
+            conn.expected_args.append(b'FIN 1234\n')
 
         assert r.backoff_block is True
         assert r.backoff_timer.get_interval() > 0
@@ -329,23 +337,23 @@ def test_backoff_many_conns():
             conn = timeout_args[1]()
             last_timeout_time = timeout_args[0]
         assert r.backoff_block is False
-        conn.expected_args.append('RDY 1\n')
+        conn.expected_args.append(b'RDY 1\n')
 
         fail = True
         if random.random() < 0.3 and total_fails > 1:
             fail = False
 
     while total_fails:
-        print "%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails)
+        print("%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails))
 
         if not conn.fails:
             # force an idle connection
             for c in conns:
                 if c.rdy > 0:
                     c.last_msg_timestamp = time.time() - 60
-                    c.expected_args.append('RDY 0\n')
+                    c.expected_args.append(b'RDY 0\n')
             conn = r._redistribute_rdy_state()
-            conn.expected_args.append('RDY 1\n')
+            conn.expected_args.append(b'RDY 1\n')
             continue
 
         msg = _send_message(conn)
@@ -356,12 +364,12 @@ def test_backoff_many_conns():
 
         if total_fails > 0:
             for c in conns:
-                c.expected_args.append('RDY 0\n')
+                c.expected_args.append(b'RDY 0\n')
         else:
             for c in conns:
-                c.expected_args.append('RDY 1\n')
+                c.expected_args.append(b'RDY 1\n')
 
-        conn.expected_args.append('FIN 1234\n')
+        conn.expected_args.append(b'FIN 1234\n')
 
         timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
@@ -369,26 +377,26 @@ def test_backoff_many_conns():
             last_timeout_time = timeout_args[0]
 
         if total_fails > 0:
-            conn.expected_args.append('RDY 1\n')
+            conn.expected_args.append(b'RDY 1\n')
 
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
     for c in conns:
         for i, call in enumerate(c.stream.write.call_args_list):
-            print "%d: %s" % (i, call)
-        assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
+            print("%d: %s" % (i, call))
+        assert c.stream.write.call_args_list == [call(arg) for arg in c.expected_args]
 
 
 def test_backoff_conns_disconnect():
-    mock_ioloop = create_autospec(IOLoop)
+    mock_ioloop = _get_ioloop()
     r = _get_reader(io_loop=mock_ioloop)
 
     num_conns = 5
     conns = []
     for i in range(num_conns):
         conn = _get_conn(r)
-        conn.expected_args = ['SUB test test\n', 'RDY 1\n']
+        conn.expected_args = [b'SUB test test\n', b'RDY 1\n']
         conn.fails = 0
         conns.append(conn)
 
@@ -407,18 +415,18 @@ def test_backoff_conns_disconnect():
                 if not conn:
                     conn = random.choice(conns)
                 else:
-                    conn.expected_args.append('RDY 1\n')
+                    conn.expected_args.append(b'RDY 1\n')
                 continue
             else:
                 c = _get_conn(r)
-                c.expected_args = ['SUB test test\n']
+                c.expected_args = [b'SUB test test\n']
                 c.fails = 0
                 conns.append(c)
 
         msg = _send_message(conn)
 
         if r.backoff_timer.get_interval() == 0:
-            conn.expected_args.append('RDY 1\n')
+            conn.expected_args.append(b'RDY 1\n')
 
         if fail or not conn.fails:
             msg.trigger(event.REQUEUE, message=msg)
@@ -426,16 +434,16 @@ def test_backoff_conns_disconnect():
             conn.fails += 1
 
             for c in conns:
-                c.expected_args.append('RDY 0\n')
-            conn.expected_args.append('REQ 1234 0\n')
+                c.expected_args.append(b'RDY 0\n')
+            conn.expected_args.append(b'REQ 1234 0\n')
         else:
             msg.trigger(event.FINISH, message=msg)
             total_fails -= 1
             conn.fails -= 1
 
             for c in conns:
-                c.expected_args.append('RDY 0\n')
-            conn.expected_args.append('FIN 1234\n')
+                c.expected_args.append(b'RDY 0\n')
+            conn.expected_args.append(b'FIN 1234\n')
 
         assert r.backoff_block is True
         assert r.backoff_timer.get_interval() > 0
@@ -446,14 +454,14 @@ def test_backoff_conns_disconnect():
             conn = timeout_args[1]()
             last_timeout_time = timeout_args[0]
         assert r.backoff_block is False
-        conn.expected_args.append('RDY 1\n')
+        conn.expected_args.append(b'RDY 1\n')
 
         fail = True
         if random.random() < 0.3 and total_fails > 1:
             fail = False
 
     while total_fails:
-        print "%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails)
+        print("%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails))
 
         msg = _send_message(conn)
 
@@ -463,12 +471,12 @@ def test_backoff_conns_disconnect():
 
         if total_fails > 0:
             for c in conns:
-                c.expected_args.append('RDY 0\n')
+                c.expected_args.append(b'RDY 0\n')
         else:
             for c in conns:
-                c.expected_args.append('RDY 1\n')
+                c.expected_args.append(b'RDY 1\n')
 
-        conn.expected_args.append('FIN 1234\n')
+        conn.expected_args.append(b'FIN 1234\n')
 
         timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
         if timeout_args[0] != last_timeout_time:
@@ -476,12 +484,12 @@ def test_backoff_conns_disconnect():
             last_timeout_time = timeout_args[0]
 
         if total_fails > 0:
-            conn.expected_args.append('RDY 1\n')
+            conn.expected_args.append(b'RDY 1\n')
 
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
     for c in conns:
         for i, call in enumerate(c.stream.write.call_args_list):
-            print "%d: %s" % (i, call)
-        assert c.stream.write.call_args_list == [((arg,),) for arg in c.expected_args]
+            print("%d: %s" % (i, call))
+        assert c.stream.write.call_args_list == [call(arg) for arg in c.expected_args]

@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-import struct
+from __future__ import unicode_literals
 import re
 
 try:
@@ -7,27 +7,30 @@ try:
 except ImportError:
     import json  # pyflakes.ignore
 
+from ._compat import bytes_types
+from ._compat import to_bytes
+from ._compat import struct_pack, struct_unpack
 from .message import Message
 
-MAGIC_V2 = '  V2'
-NL = '\n'
+MAGIC_V2 = b'  V2'
+NL = b'\n'
 
 FRAME_TYPE_RESPONSE = 0
 FRAME_TYPE_ERROR = 1
 FRAME_TYPE_MESSAGE = 2
 
 # commmands
-AUTH = 'AUTH'
-FIN = 'FIN'  # success
-IDENTIFY = 'IDENTIFY'
-MPUB = 'MPUB'
-NOP = 'NOP'
-PUB = 'PUB'  # publish
-RDY = 'RDY'
-REQ = 'REQ'  # requeue
-SUB = 'SUB'
-TOUCH = 'TOUCH'
-DPUB = 'DPUB'  # deferred publish
+AUTH = b'AUTH'
+FIN = b'FIN'  # success
+IDENTIFY = b'IDENTIFY'
+MPUB = b'MPUB'
+NOP = b'NOP'
+PUB = b'PUB'  # publish
+RDY = b'RDY'
+REQ = b'REQ'  # requeue
+SUB = b'SUB'
+TOUCH = b'TOUCH'
+DPUB = b'DPUB'  # deferred publish
 
 
 class Error(Exception):
@@ -54,28 +57,29 @@ class IntegrityError(Error):
 
 
 def unpack_response(data):
-    frame = struct.unpack('>l', data[:4])[0]
+    frame = struct_unpack('>l', data[:4])[0]
     return frame, data[4:]
 
 
 def decode_message(data):
-    timestamp = struct.unpack('>q', data[:8])[0]
-    attempts = struct.unpack('>h', data[8:10])[0]
+    timestamp = struct_unpack('>q', data[:8])[0]
+    attempts = struct_unpack('>h', data[8:10])[0]
     id = data[10:26]
     body = data[26:]
     return Message(id, body, timestamp, attempts)
 
 
 def _command(cmd, body, *params):
-    body_data = ''
-    params_data = ''
+    body_data = b''
+    params_data = b''
     if body:
-        assert isinstance(body, str), 'body must be a string'
-        body_data = struct.pack('>l', len(body)) + body
+        assert isinstance(body, bytes_types), 'body must be a bytestring'
+        body_bytes = to_bytes(body)  # raises if not convertible to bytes
+        body_data = struct_pack('>l', len(body)) + body_bytes
     if len(params):
-        params = [p.encode('utf-8') if isinstance(p, unicode) else p for p in params]
-        params_data = ' ' + ' '.join(params)
-    return '%s%s%s%s' % (cmd, params_data, NL, body_data)
+        params = [to_bytes(p) for p in params]
+        params_data = b' ' + b' '.join(params)
+    return b'%s%s%s%s' % (cmd, params_data, NL, body_data)
 
 
 def subscribe(topic, channel):
@@ -85,7 +89,7 @@ def subscribe(topic, channel):
 
 
 def identify(data):
-    return _command(IDENTIFY, json.dumps(data))
+    return _command(IDENTIFY, to_bytes(json.dumps(data)))
 
 
 def auth(data):
@@ -121,9 +125,10 @@ def pub(topic, data):
 
 def mpub(topic, data):
     assert isinstance(data, (set, list))
-    body = struct.pack('>l', len(data))
+    body = struct_pack('>l', len(data))
     for m in data:
-        body += struct.pack('>l', len(m)) + m
+        assert isinstance(m, bytes_types), 'message bodies must be bytestrings'
+        body += struct_pack('>l', len(m)) + to_bytes(m)
     return _command(MPUB, body, topic)
 
 

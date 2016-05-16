@@ -1,10 +1,12 @@
 from __future__ import absolute_import
+from __future__ import unicode_literals
 
 import time
 import socket
-import struct
 import logging
 
+from ._compat import string_types
+from ._compat import struct_unpack
 from .version import __version__
 
 try:
@@ -146,7 +148,7 @@ class AsyncConn(event.EventedMixin):
             io_loop=None,
             auth_secret=None,
             msg_timeout=None):
-        assert isinstance(host, (str, unicode))
+        assert isinstance(host, string_types)
         assert isinstance(port, int)
         assert isinstance(timeout, float)
         assert isinstance(tls_options, (dict, None.__class__))
@@ -156,7 +158,7 @@ class AsyncConn(event.EventedMixin):
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
-        assert isinstance(auth_secret, (str, unicode, None.__class__))
+        assert isinstance(auth_secret, string_types + (None.__class__,))
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
         assert msg_timeout is None or (isinstance(msg_timeout, (float, int)) and msg_timeout > 0)
@@ -259,7 +261,7 @@ class AsyncConn(event.EventedMixin):
 
     def _read_size(self, data):
         try:
-            size = struct.unpack('>l', data)[0]
+            size = struct_unpack('>l', data)[0]
         except Exception:
             self.close()
             self.trigger(
@@ -336,7 +338,7 @@ class AsyncConn(event.EventedMixin):
     def send_rdy(self, value):
         try:
             self.send(protocol.ready(value))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(
                 event.ERROR,
@@ -369,7 +371,7 @@ class AsyncConn(event.EventedMixin):
         self.on(event.RESPONSE, self._on_identify_response)
         try:
             self.send(protocol.identify(identify_data))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(
                 event.ERROR,
@@ -380,12 +382,12 @@ class AsyncConn(event.EventedMixin):
     def _on_identify_response(self, data, **kwargs):
         self.off(event.RESPONSE, self._on_identify_response)
 
-        if data == 'OK':
+        if data == b'OK':
             logger.warning('nsqd version does not support feature netgotiation')
             return self.trigger(event.READY, conn=self)
 
         try:
-            data = json.loads(data)
+            data = json.loads(data.decode('utf-8'))
         except ValueError:
             self.close()
             self.trigger(
@@ -439,7 +441,7 @@ class AsyncConn(event.EventedMixin):
             self.trigger(event.AUTH, conn=self, data=self.auth_secret)
             try:
                 self.send(protocol.auth(self.auth_secret))
-            except Exception, e:
+            except Exception as e:
                 self.close()
                 self.trigger(
                     event.ERROR,
@@ -451,7 +453,7 @@ class AsyncConn(event.EventedMixin):
 
     def _on_auth_response(self, data, **kwargs):
         try:
-            data = json.loads(data)
+            data = json.loads(data.decode('utf-8'))
         except ValueError:
             self.close()
             self.trigger(
@@ -481,7 +483,7 @@ class AsyncConn(event.EventedMixin):
             message.on(event.TOUCH, self._on_message_touch)
 
             self.trigger(event.MESSAGE, conn=self, message=message)
-        elif frame == protocol.FRAME_TYPE_RESPONSE and data == '_heartbeat_':
+        elif frame == protocol.FRAME_TYPE_RESPONSE and data == b'_heartbeat_':
             self.send(protocol.nop())
             self.trigger(event.HEARTBEAT, conn=self)
         elif frame == protocol.FRAME_TYPE_RESPONSE:
@@ -499,7 +501,7 @@ class AsyncConn(event.EventedMixin):
         try:
             time_ms = self.requeue_delay * message.attempts * 1000 if time_ms < 0 else time_ms
             self.send(protocol.requeue(message.id, time_ms))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(event.ERROR, conn=self, error=protocol.SendError(
                 'failed to send REQ %s @ %d' % (message.id, time_ms), e))
@@ -510,7 +512,7 @@ class AsyncConn(event.EventedMixin):
         self.in_flight -= 1
         try:
             self.send(protocol.finish(message.id))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(
                 event.ERROR,
@@ -521,7 +523,7 @@ class AsyncConn(event.EventedMixin):
     def _on_message_touch(self, message, **kwargs):
         try:
             self.send(protocol.touch(message.id))
-        except Exception, e:
+        except Exception as e:
             self.close()
             self.trigger(
                 event.ERROR,
