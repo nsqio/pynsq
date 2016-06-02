@@ -51,9 +51,9 @@ def test_backoff_timer():
     timer.failure()
     interval = '%0.2f' % timer.get_interval()
     assert interval == '3.19'
-    assert timer.min_interval == Decimal('.1')
-    assert timer.short_interval == Decimal('2.9975')
-    assert timer.long_interval == Decimal('0.089925')
+    assert timer.min_interval == 100000 #Decimal('.1')
+    assert timer.short_interval == 2997500 # Decimal('2.9975')
+    assert timer.long_interval == 89925 #Decimal('0.089925')
 
     timer.failure()
     interval = '%0.2f' % timer.get_interval()
