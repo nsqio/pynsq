@@ -27,13 +27,17 @@ class BackoffTimer(object):
 
         self.short_interval = Decimal(0)
         self.long_interval = Decimal(0)
+        self.update_interval()
 
     def success(self):
         """Update the timer to reflect a successfull call"""
+        if self.interval == 0.0:
+            return
         self.short_interval -= self.short_unit
         self.long_interval -= self.long_unit
         self.short_interval = max(self.short_interval, Decimal(0))
         self.long_interval = max(self.long_interval, Decimal(0))
+        self.update_interval()
 
     def failure(self):
         """Update the timer to reflect a failed call"""
@@ -41,6 +45,10 @@ class BackoffTimer(object):
         self.long_interval += self.long_unit
         self.short_interval = min(self.short_interval, self.max_short_timer)
         self.long_interval = min(self.long_interval, self.max_long_timer)
+        self.update_interval()
+
+    def update_interval(self):
+        self.interval = float(self.min_interval + self.short_interval + self.long_interval)
 
     def get_interval(self):
-        return float(self.min_interval + self.short_interval + self.long_interval)
+        return self.interval
