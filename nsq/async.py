@@ -6,7 +6,7 @@ import socket
 import logging
 
 from ._compat import string_types
-from ._compat import struct_unpack
+from ._compat import struct_l
 from .version import __version__
 
 try:
@@ -261,7 +261,7 @@ class AsyncConn(event.EventedMixin):
 
     def _read_size(self, data):
         try:
-            size = struct_unpack('>l', data)[0]
+            size = struct_l.unpack(data)[0]
         except Exception:
             self.close()
             self.trigger(

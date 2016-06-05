@@ -9,7 +9,7 @@ except ImportError:
 
 from ._compat import bytes_types
 from ._compat import to_bytes
-from ._compat import struct_pack, struct_unpack
+from ._compat import struct_h, struct_l, struct_q
 from .message import Message
 
 MAGIC_V2 = b'  V2'
@@ -57,13 +57,13 @@ class IntegrityError(Error):
 
 
 def unpack_response(data):
-    frame = struct_unpack('>l', data[:4])[0]
+    frame = struct_l.unpack(data[:4])[0]
     return frame, data[4:]
 
 
 def decode_message(data):
-    timestamp = struct_unpack('>q', data[:8])[0]
-    attempts = struct_unpack('>h', data[8:10])[0]
+    timestamp = struct_q.unpack(data[:8])[0]
+    attempts = struct_h.unpack(data[8:10])[0]
     id = data[10:26]
     body = data[26:]
     return Message(id, body, timestamp, attempts)
@@ -75,7 +75,7 @@ def _command(cmd, body, *params):
     if body:
         assert isinstance(body, bytes_types), 'body must be a bytestring'
         body_bytes = to_bytes(body)  # raises if not convertible to bytes
-        body_data = struct_pack('>l', len(body)) + body_bytes
+        body_data = struct_l.pack(len(body)) + body_bytes
     if len(params):
         params = [to_bytes(p) for p in params]
         params_data = b' ' + b' '.join(params)
@@ -125,10 +125,10 @@ def pub(topic, data):
 
 def mpub(topic, data):
     assert isinstance(data, (set, list))
-    body = struct_pack('>l', len(data))
+    body = struct_l.pack(len(data))
     for m in data:
         assert isinstance(m, bytes_types), 'message bodies must be bytestrings'
-        body += struct_pack('>l', len(m)) + to_bytes(m)
+        body += struct_l.pack(len(m)) + to_bytes(m)
     return _command(MPUB, body, topic)
 
 
