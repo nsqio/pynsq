@@ -100,17 +100,15 @@ def test_read_body():
     on_data = create_autospec(f)
     conn.on('data', on_data)
 
-    mock_ioloop_addcb = create_autospec(f)
-    mock_io_loop.add_callback = mock_ioloop_addcb
     data = 'NSQ'
     conn._read_body(data)
     on_data.assert_called_once_with(conn=conn, data=data)
-    mock_ioloop_addcb.assert_called_once_with(conn._start_read)
+    conn.stream.read_bytes.assert_called_once_with(4, conn._read_size)
 
     # now test functionality when the data_callback fails
     on_data.reset_mock()
-    mock_ioloop_addcb.reset_mock()
+    conn.stream.read_bytes.reset_mock()
     on_data.return_value = Exception("Boom.")
     conn._read_body(data)
-    # verify that we still added callback for the next start_read
-    mock_ioloop_addcb.assert_called_once_with(conn._start_read)
+    # verify that the next _start_read was called
+    conn.stream.read_bytes.assert_called_once_with(4, conn._read_size)

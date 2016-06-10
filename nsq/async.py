@@ -277,7 +277,7 @@ class AsyncConn(event.EventedMixin):
             self.trigger(event.DATA, conn=self, data=data)
         except Exception:
             logger.exception('uncaught exception in data event')
-        self.io_loop.add_callback(self._start_read)
+        self._start_read()
 
     def send(self, data):
         self.stream.write(data)
