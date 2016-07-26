@@ -594,7 +594,7 @@ class Reader(Client):
             return
 
         try:
-            lookup_data = json.loads(response.body)
+            lookup_data = json.loads(response.body.decode("utf8"))
         except ValueError:
             logger.warning('[%s] lookupd %s failed to parse JSON: %r',
                            self.name, lookupd_url, response.body)
