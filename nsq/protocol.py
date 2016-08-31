@@ -79,7 +79,7 @@ def _command(cmd, body, *params):
     if len(params):
         params = [to_bytes(p) for p in params]
         params_data = b' ' + b' '.join(params)
-    return b'%s%s%s%s' % (cmd, params_data, NL, body_data)
+    return b''.join((cmd, params_data, NL, body_data))
 
 
 def subscribe(topic, channel):
