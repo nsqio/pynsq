@@ -1,6 +1,6 @@
 ## pynsq
 
-[![Build Status](https://secure.travis-ci.org/nsqio/pynsq.svg)](http://travis-ci.org/nsqio/pynsq) [![GitHub release](https://img.shields.io/github/release/nsqio/pynsq.svg)](https://github.com/nsqio/pynsq/releases/latest) [![PyPI](https://img.shields.io/pypi/v/pynsq.svg)](https://pypi.python.org/pypi/pynsq) ![PyPI](https://img.shields.io/pypi/dm/pynsq.svg)
+[![Build Status](https://secure.travis-ci.org/nsqio/pynsq.svg)](http://travis-ci.org/nsqio/pynsq) [![GitHub release](https://img.shields.io/github/release/nsqio/pynsq.svg)](https://github.com/nsqio/pynsq/releases/latest) [![PyPI](https://img.shields.io/pypi/v/pynsq.svg)](https://pypi.python.org/pypi/pynsq)
 
 The official Python client library for [NSQ][nsq].
 
