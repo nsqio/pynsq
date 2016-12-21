@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1 - 2016-12-21
+
+ * #161 - fix Python 3.4 protocol error (thanks @xiaost)
+ * #160 - fix Python 3 JSON decoding error (thanks @mikolajb)
+
 ## 0.7.0 - 2016-07-09
 
  * #150 - Python 3 support (thanks @nickstenning et. al)
