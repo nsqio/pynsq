@@ -24,7 +24,60 @@ from nsq.reader import Reader
 from nsq.snappy_socket import SnappySocket
 
 
-class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
+class IntegrationBase(tornado.testing.AsyncTestCase):
+    nsqd_command = []
+    nsqlookupd_command = []
+
+    def setUp(self):
+        super(IntegrationBase, self).setUp()
+        if not hasattr(self, 'processes'):
+            self.processes = []
+        
+        if self.nsqlookupd_command:
+            proc = subprocess.Popen(self.nsqlookupd_command)
+            self.processes.append(proc)
+            self.wait_ping('http://127.0.0.1:4161/ping')
+        if self.nsqd_command:
+            proc = subprocess.Popen(self.nsqd_command)
+            self.processes.append(proc)
+            self.wait_ping('http://127.0.0.1:4151/ping')
+
+
+    def tearDown(self):
+        super(IntegrationBase, self).tearDown()
+        for proc in self.processes:
+            os.kill(proc.pid, signal.SIGKILL)
+            proc.wait()
+
+
+    def wait_ping(self, endpoint):
+        start = time.time()
+        http = tornado.httpclient.HTTPClient()
+        while True:
+            try:
+                resp = http.fetch(endpoint)
+                if resp.body == b'OK':
+                    break
+                continue
+            except:
+                if time.time() - start > 5:
+                    raise
+                time.sleep(0.1)
+                continue
+
+
+    def _send_messages(self, topic, count, body):
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
+        c.connect()
+
+        def _on_ready(*args, **kwargs):
+            for i in range(count):
+                c.send(protocol.pub(topic, body))
+
+        c.on('ready', _on_ready)
+
+
+class ReaderIntegrationTest(IntegrationBase):
     identify_options = {
         'user_agent': 'sup',
         'snappy': True,
@@ -38,31 +91,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
     nsqd_command = ['nsqd', '--verbose', '--snappy',
                     '--tls-key=%s/tests/key.pem' % base_dir,
                     '--tls-cert=%s/tests/cert.pem' % base_dir]
-
-    def setUp(self):
-        super(ReaderIntegrationTest, self).setUp()
-        self.processes = []
-        proc = subprocess.Popen(self.nsqd_command)
-        self.processes.append(proc)
-        http = tornado.httpclient.HTTPClient()
-        start = time.time()
-        while True:
-            try:
-                resp = http.fetch('http://127.0.0.1:4151/ping')
-                if resp.body == b'OK':
-                    break
-                continue
-            except:
-                if time.time() - start > 5:
-                    raise
-                time.sleep(0.1)
-                continue
-
-    def tearDown(self):
-        super(ReaderIntegrationTest, self).tearDown()
-        for proc in self.processes:
-            os.kill(proc.pid, signal.SIGKILL)
-            proc.wait()
 
     def test_bad_reader_arguments(self):
         topic = 'test_reader_msgs_%s' % time.time()
@@ -124,15 +152,6 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         assert response['conn'] is c
         assert response['data'] == b'OK'
 
-    def _send_messages(self, topic, count, body):
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
-        c.connect()
-
-        def _on_ready(*args, **kwargs):
-            for i in range(count):
-                c.send(protocol.pub(topic, body))
-
-        c.on('ready', _on_ready)
 
     def test_conn_messages(self):
         self.msg_count = 0
@@ -200,7 +219,7 @@ class ReaderIntegrationTest(tornado.testing.AsyncTestCase):
         self.wait()
 
 
-class DeflateReaderIntegrationTest(ReaderIntegrationTest):
+class DeflateReaderIntegrationTest(IntegrationBase):
 
     identify_options = {
         'user_agent': 'sup',
@@ -237,3 +256,43 @@ class DeflateReaderIntegrationTest(ReaderIntegrationTest):
         self.wait()
         assert isinstance(c.socket, DeflateSocket)
         assert isinstance(c.socket._socket, ssl.SSLSocket)
+
+
+class LookupdReaderIntegrationTest(IntegrationBase):
+    nsqd_command = ['nsqd', '--verbose', '-lookupd-tcp-address=127.0.0.1:4160']
+    nsqlookupd_command = ['nsqlookupd', '--verbose', '-broadcast-address=127.0.0.1']
+
+    identify_options = {
+        'user_agent': 'sup',
+        'heartbeat_interval': 10,
+        'output_buffer_size': 4096,
+        'output_buffer_timeout': 50
+    }
+
+    def test_reader_messages(self):
+        self.msg_count = 0
+        num_messages = 1
+
+        topic = 'test_lookupd_msgs_%s' % int(time.time())
+        self._send_messages(topic, num_messages, b'sup')
+
+        def handler(msg):
+            assert msg.body == b'sup'
+            self.msg_count += 1
+            if self.msg_count >= num_messages:
+                self.stop()
+            return True
+
+        r = Reader(lookupd_http_addresses=['http://127.0.0.1:4161'],
+                    topic=topic,
+                    channel='ch',
+                    io_loop=self.io_loop, 
+                    message_handler=handler, 
+                    lookupd_poll_interval=1,
+                    lookupd_poll_jitter=0.01,
+                    max_in_flight=100,
+                   **self.identify_options)
+
+        self.wait()
+        r.close()
+    
