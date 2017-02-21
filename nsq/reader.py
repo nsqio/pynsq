@@ -582,7 +582,7 @@ class Reader(Client):
 
         req = tornado.httpclient.HTTPRequest(
             lookupd_url, method='GET',
-            header={"Accept":"application/vnd.nsq; version=1.0"},
+            headers={"Accept":"application/vnd.nsq; version=1.0"},
             connect_timeout=self.lookupd_connect_timeout,
             request_timeout=self.lookupd_request_timeout)
         callback = functools.partial(self._finish_query_lookupd, lookupd_url=lookupd_url)
