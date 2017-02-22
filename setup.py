@@ -16,7 +16,7 @@ class PyTest(TestCommand):
 
 
 # also update in nsq/version.py
-version = '0.7.1'
+version = '0.8-alpha'
 
 
 setup(
@@ -39,7 +39,7 @@ setup(
                    'python-snappy', 'tornado'],
     cmdclass={'test': PyTest},
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 6 - Mature',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.6',
