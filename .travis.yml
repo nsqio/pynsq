@@ -3,13 +3,11 @@ python:
   - 2.7
   - 3.5
 env:
-  - NSQ_DOWNLOAD=nsq-0.3.6.linux-amd64.go1.5.1 TORNADO_VERSION=3.2.2
-  - NSQ_DOWNLOAD=nsq-0.3.6.linux-amd64.go1.5.1 TORNADO_VERSION=4.4.1
-  - NSQ_DOWNLOAD=nsq-0.3.7.linux-amd64.go1.6 TORNADO_VERSION=3.2.2
-  - NSQ_DOWNLOAD=nsq-0.3.7.linux-amd64.go1.6 TORNADO_VERSION=4.4.1
   - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=3.2.2
-  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.4.1
-script: 
+  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.4.2
+  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=3.2.2
+  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=4.4.2
+script:
   - ./travis_test.sh
 notifications:
   email: false
