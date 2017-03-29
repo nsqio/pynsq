@@ -225,6 +225,7 @@ class AsyncConn(event.EventedMixin):
 
         self.stream = tornado.iostream.IOStream(self.socket, io_loop=self.io_loop)
         self.stream.set_close_callback(self._socket_close)
+        self.stream.set_nodelay(True)
 
         self.state = CONNECTING
         self.on(event.CONNECT, self._on_connect)
