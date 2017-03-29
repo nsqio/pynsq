@@ -11,6 +11,7 @@ install_snappy () {
     # install snappy from source so we can compile with `-fPIC` witout having to sudo install stuff
     git clone https://github.com/google/snappy.git
     cd snappy
+    git checkout 1.1.4
     sh autogen.sh
     mkdir -p "$HOME/usr/local"
     ./configure --prefix="$HOME/usr/local"
