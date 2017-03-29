@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 - 2017-03-28
+
+ * #167/#168 - make forwards compatible nsqlookupd queries for NSQ v1.0.0-compat
+ * #169 - send forwards compatible IDENTIFY attributes for NSQ v1.0.0-compat
+ * #170 - enable TCP_NODELAY on connections
+
 ## 0.7.1 - 2016-12-21
 
  * #161 - fix Python 3.4 protocol error (thanks @xiaost)
