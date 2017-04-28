@@ -215,8 +215,17 @@ class AsyncConn(event.EventedMixin):
     def __str__(self):
         return self.host + ':' + str(self.port)
 
+    def connected(self):
+        return self.state == CONNECTED
+
+    def connecting(self):
+        return self.state == CONNECTING
+
+    def closed(self):
+        return self.state in (INIT, DISCONNECTED)
+
     def connect(self):
-        if self.state not in [INIT, DISCONNECTED]:
+        if not self.closed():
             return
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -128,11 +128,15 @@ class Writer(Client):
             callback = functools.partial(self._finish_pub, command=command,
                                          topic=topic, msg=msg)
 
-        if not self.conns:
-            callback(None, protocol.SendError('no connections'))
+        open_connections = [
+            conn for conn in self.conns.values()
+            if conn.connected()
+        ]
+        if not open_connections:
+            callback(None, protocol.SendError('no open connections'))
             return
 
-        conn = random.choice(list(self.conns.values()))
+        conn = random.choice(open_connections)
         conn.callback_queue.append(callback)
         cmd = getattr(protocol, command)
 
@@ -145,6 +149,7 @@ class Writer(Client):
             conn.send(cmd(*args))
         except Exception:
             logger.exception('[%s] failed to send %s' % (conn.id, command))
+            callback(None, protocol.SendError('send error'))
             conn.close()
 
     def _on_connection_error(self, conn, error, **kwargs):
