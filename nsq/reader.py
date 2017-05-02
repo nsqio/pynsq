@@ -460,8 +460,9 @@ class Reader(Client):
                 conn.rdy_timeout = self.io_loop.add_timeout(time.time() + 5, rdy_retry_callback)
             return
 
+        new_rdy = max(self.total_rdy - conn.rdy + value, 0)
         if conn.send_rdy(value):
-            self.total_rdy = max(self.total_rdy - conn.rdy + value, 0)
+            self.total_rdy = new_rdy
 
     def connect_to_nsqd(self, host, port):
         """
