@@ -21,8 +21,7 @@ def pytest_generate_tests(metafunc):
                 ('invalid_name_due_to_length_this_is_really_really_really_really_long', False),
                 ('test-with_period.', True),
                 ('test#ephemeral', True),
-                ('test:ephemeral', False),
-                ]:
+                ('test:ephemeral', False)]:
             metafunc.addcall(funcargs=dict(name=name, good=good))
     if metafunc.function == test_channel_names:
         for name, good in [
@@ -30,8 +29,7 @@ def pytest_generate_tests(metafunc):
                 ('test-with_period.', True),
                 ('test#ephemeral', True),
                 ('invalid_name_due_to_length_this_is_really_really_really_really_long', False),
-                ('invalid name with space', False),
-                ]:
+                ('invalid name with space', False)]:
             metafunc.addcall(funcargs=dict(name=name, good=good))
 
 

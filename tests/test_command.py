@@ -67,8 +67,7 @@ def pytest_generate_tests(metafunc):
                     b'PUB test\n' + struct_l.pack(len(msgs[0])) + to_bytes(msgs[0])),
                 (protocol.mpub,
                     {'topic': 'test', 'data': msgs},
-                    b'MPUB test\n' + struct_l.pack(len(mpub_body)) + to_bytes(mpub_body))
-                ]:
+                    b'MPUB test\n' + struct_l.pack(len(mpub_body)) + to_bytes(mpub_body))]:
             metafunc.addcall(funcargs=dict(cmd_method=cmd_method, kwargs=kwargs, result=result))
 
 

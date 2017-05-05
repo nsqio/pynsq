@@ -32,7 +32,7 @@ class IntegrationBase(tornado.testing.AsyncTestCase):
         super(IntegrationBase, self).setUp()
         if not hasattr(self, 'processes'):
             self.processes = []
-        
+
         if self.nsqlookupd_command:
             proc = subprocess.Popen(self.nsqlookupd_command)
             self.processes.append(proc)
@@ -42,13 +42,11 @@ class IntegrationBase(tornado.testing.AsyncTestCase):
             self.processes.append(proc)
             self.wait_ping('http://127.0.0.1:4151/ping')
 
-
     def tearDown(self):
         super(IntegrationBase, self).tearDown()
         for proc in self.processes:
             os.kill(proc.pid, signal.SIGKILL)
             proc.wait()
-
 
     def wait_ping(self, endpoint):
         start = time.time()
@@ -64,7 +62,6 @@ class IntegrationBase(tornado.testing.AsyncTestCase):
                     raise
                 time.sleep(0.1)
                 continue
-
 
     def _send_messages(self, topic, count, body):
         c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
@@ -96,7 +93,7 @@ class ReaderIntegrationTest(IntegrationBase):
         topic = 'test_reader_msgs_%s' % time.time()
         bad_options = dict(self.identify_options)
         bad_options.update(dict(foo=10))
-        handler = lambda x: None
+        handler = lambda x: None # noqa
 
         self.assertRaises(
             AssertionError,
@@ -151,7 +148,6 @@ class ReaderIntegrationTest(IntegrationBase):
         print(response)
         assert response['conn'] is c
         assert response['data'] == b'OK'
-
 
     def test_conn_messages(self):
         self.msg_count = 0
@@ -284,15 +280,14 @@ class LookupdReaderIntegrationTest(IntegrationBase):
             return True
 
         r = Reader(lookupd_http_addresses=['http://127.0.0.1:4161'],
-                    topic=topic,
-                    channel='ch',
-                    io_loop=self.io_loop, 
-                    message_handler=handler, 
-                    lookupd_poll_interval=1,
-                    lookupd_poll_jitter=0.01,
-                    max_in_flight=100,
+                   topic=topic,
+                   channel='ch',
+                   io_loop=self.io_loop,
+                   message_handler=handler,
+                   lookupd_poll_interval=1,
+                   lookupd_poll_jitter=0.01,
+                   max_in_flight=100,
                    **self.identify_options)
 
         self.wait()
         r.close()
-    
