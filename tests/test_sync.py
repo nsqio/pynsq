@@ -33,7 +33,8 @@ def test_sync_authenticate_subscribe():
     c = sync.SyncConn()
     c.connect("127.0.0.1", 4150)
 
-    c.send(protocol.identify({'short_id': 'test', 'long_id': 'test.example', 'client_id': 'test', 'hostname':'test.example'}))
+    c.send(protocol.identify({'short_id': 'test', 'long_id': 'test.example',
+                              'client_id': 'test', 'hostname': 'test.example'}))
     c.send(protocol.subscribe('test', 'ch'))
 
     mock_response_write(c, protocol.FRAME_TYPE_RESPONSE, b'OK')
@@ -54,7 +55,8 @@ def test_sync_receive_messages():
     c = sync.SyncConn()
     c.connect("127.0.0.1", 4150)
 
-    c.send(protocol.identify({'short_id': 'test', 'long_id': 'test.example', 'client_id': 'test', 'hostname':'test.example'}))
+    c.send(protocol.identify({'short_id': 'test', 'long_id': 'test.example',
+                              'client_id': 'test', 'hostname': 'test.example'}))
     c.send(protocol.subscribe('test', 'ch'))
 
     mock_response_write(c, protocol.FRAME_TYPE_RESPONSE, b'OK')
