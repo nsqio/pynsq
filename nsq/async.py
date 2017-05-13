@@ -486,7 +486,6 @@ class AsyncConn(event.EventedMixin):
         frame, data = protocol.unpack_response(data)
         if frame == protocol.FRAME_TYPE_MESSAGE:
             self.last_msg_timestamp = time.time()
-            self.rdy = max(self.rdy - 1, 0)
             self.in_flight += 1
 
             message = protocol.decode_message(data)

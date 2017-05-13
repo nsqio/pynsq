@@ -52,6 +52,7 @@ def _get_conn(reader):
 
 def _send_message(conn):
     msg = _get_message(conn)
+    conn.in_flight += 1
     conn.trigger(event.MESSAGE, conn=conn, message=msg)
     return msg
 

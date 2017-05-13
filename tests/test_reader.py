@@ -160,7 +160,7 @@ class ReaderIntegrationTest(IntegrationBase):
 
         def _on_message(*args, **kwargs):
             self.msg_count += 1
-            if c.rdy == 0:
+            if c.in_flight == 5:
                 self.stop()
 
         def _on_ready(*args, **kwargs):
