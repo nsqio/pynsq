@@ -1,10 +1,16 @@
 # Changelog
 
+## 0.8.1 - 2017-06-01
+
+ * #177/#179 - improved RDY handling; don't decrement RDY; prevent edge case max in flight violations (thanks @alpaker)
+ * #175/#176 - prevent edge case max in flight violation (thanks @alpaker)
+ * #174 - ensure that writer only publishes to active connections (thanks @panaetov)
+
 ## 0.8.0 - 2017-03-28
 
  * #167/#168 - make forwards compatible nsqlookupd queries for NSQ v1.0.0-compat
  * #169 - send forwards compatible IDENTIFY attributes for NSQ v1.0.0-compat
- * #170 - enable TCP_NODELAY on connections
+ * #170 - enable TCP_NODELAY on connections (thanks @protoss-player)
 
 ## 0.7.1 - 2016-12-21
 
@@ -72,7 +78,7 @@
 ## 0.6.2 - 2014-02-21
 
 IMPORTANT: this is a bug-fix release to address an issue where `Reader` would raise
-and exception when receiving a heartbeat.
+an exception when receiving a heartbeat.
 
  * #68 - fix heartbeat_interval bug
 
