@@ -344,10 +344,15 @@ class Reader(Client):
         if self.backoff_timer.get_interval() or self.max_in_flight == 0:
             return
 
-        # On a new connection or in backoff we start with a tentative RDY count
-        # of 1.  After successfully receiving a first message we go to full throttle.
-        if conn.rdy == 1:
-            self._send_rdy(conn, self._connection_max_in_flight())
+        # Update RDY in 2 cases:
+        #     1. On a new connection or in backoff we start with a tentative RDY
+        #        count of 1.  After successfully receiving a first message we go to
+        #        full throttle.
+        #     2. After a change in connection count or max_in_flight we adjust to the new
+        #        connection_max_in_flight.
+        conn_max_in_flight = self._connection_max_in_flight()
+        if conn.rdy == 1 or conn.rdy != conn_max_in_flight:
+            self._send_rdy(conn, conn_max_in_flight)
 
     def _finish_backoff_block(self):
         self.backoff_timeout = None
@@ -503,6 +508,12 @@ class Reader(Client):
                 conn.id, self.name, conn.max_rdy_count, self.max_in_flight)
 
         self.conns[conn.id] = conn
+
+        conn_max_in_flight = self._connection_max_in_flight()
+        for c in self.conns.values():
+            if c.rdy > conn_max_in_flight:
+                self._send_rdy(c, conn_max_in_flight)
+
         # we send an initial RDY of 1 up to our configured max_in_flight
         # this resolves two cases:
         #    1. `max_in_flight >= num_conns` ensuring that no connections are ever
