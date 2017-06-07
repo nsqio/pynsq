@@ -237,7 +237,6 @@ class Reader(Client):
         self.redist_periodic = PeriodicCallback(
             self._redistribute_rdy_state,
             5 * 1000,
-            io_loop=self.io_loop,
         )
         self.redist_periodic.start()
 
@@ -249,7 +248,6 @@ class Reader(Client):
         self.query_periodic = PeriodicCallback(
             self.query_lookupd,
             self.lookupd_poll_interval * 1000,
-            io_loop=self.io_loop,
         )
 
         # randomize the time we start this poll loop so that all

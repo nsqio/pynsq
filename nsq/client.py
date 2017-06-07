@@ -15,8 +15,7 @@ class Client(object):
             self.io_loop = tornado.ioloop.IOLoop.instance()
 
         tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps,
-                                        60 * 1000,
-                                        io_loop=self.io_loop).start()
+                                        60 * 1000).start()
 
     def _on_connection_identify(self, conn, data, **kwargs):
         logger.info('[%s:%s] IDENTIFY sent %r' % (conn.id, self.name, data))
