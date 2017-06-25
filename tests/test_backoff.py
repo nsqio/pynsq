@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 from __future__ import print_function
-from __future__ import with_statement
 from __future__ import unicode_literals
 
 import os
@@ -8,74 +7,35 @@ import sys
 import random
 import time
 
-from mock import call, patch, create_autospec
-from tornado.ioloop import IOLoop
+from mock import call
+
+from .reader_unit_test_helpers import (
+    get_reader,
+    get_ioloop,
+    get_conn,
+    send_message
+)
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-import nsq
 from nsq import event
 
 
-_conn_port = 4150
-
-
-def _message_handler(msg):
-    msg.enable_async()
-
-
-def _get_reader(io_loop=None, max_in_flight=5):
-    return nsq.Reader("test", "test",
-                      message_handler=_message_handler,
-                      lookupd_http_addresses=["http://test.local:4161"],
-                      max_in_flight=max_in_flight,
-                      io_loop=io_loop)
-
-
-def _get_ioloop():
-    ioloop = create_autospec(IOLoop)
-    ioloop.time.return_value = 0
-    return ioloop
-
-
-def _get_conn(reader):
-    global _conn_port
-    with patch('nsq.async.tornado.iostream.IOStream', autospec=True):
-        conn = reader.connect_to_nsqd('localhost', _conn_port)
-    _conn_port += 1
-    conn.trigger(event.READY, conn=conn)
-    return conn
-
-
-def _send_message(conn):
-    msg = _get_message(conn)
-    conn.in_flight += 1
-    conn.trigger(event.MESSAGE, conn=conn, message=msg)
-    return msg
-
-
-def _get_message(conn):
-    msg = nsq.Message("1234", "{}", 1234, 0)
-    msg.on('finish', conn._on_message_finish)
-    msg.on('requeue', conn._on_message_requeue)
-    return msg
-
-
 def test_backoff_easy():
-    mock_ioloop = _get_ioloop()
-    r = _get_reader(mock_ioloop)
-    conn = _get_conn(r)
+    mock_ioloop = get_ioloop()
+    r = get_reader(mock_ioloop)
+    conn = get_conn(r)
 
-    msg = _send_message(conn)
+    msg = send_message(conn)
 
     msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
-    msg = _send_message(conn)
+    msg = send_message(conn)
 
     msg.trigger(event.REQUEUE, message=msg)
     assert r.backoff_block is True
@@ -88,7 +48,7 @@ def test_backoff_easy():
     send_args, send_kwargs = conn.stream.write.call_args
     assert send_args[0] == b'RDY 1\n'
 
-    msg = _send_message(conn)
+    msg = send_message(conn)
 
     msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
@@ -109,18 +69,18 @@ def test_backoff_easy():
 
 
 def test_backoff_out_of_order():
-    mock_ioloop = _get_ioloop()
-    r = _get_reader(mock_ioloop, max_in_flight=4)
-    conn1 = _get_conn(r)
-    conn2 = _get_conn(r)
+    mock_ioloop = get_ioloop()
+    r = get_reader(mock_ioloop, max_in_flight=4)
+    conn1 = get_conn(r)
+    conn2 = get_conn(r)
 
-    msg = _send_message(conn1)
+    msg = send_message(conn1)
 
     msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
 
-    msg = _send_message(conn1)
+    msg = send_message(conn1)
 
     msg.trigger(event.REQUEUE, message=msg)
     assert r.backoff_block is True
@@ -128,7 +88,7 @@ def test_backoff_out_of_order():
     assert mock_ioloop.add_timeout.called
     timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
 
-    msg = _send_message(conn1)
+    msg = send_message(conn1)
 
     msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is True
@@ -160,17 +120,17 @@ def test_backoff_out_of_order():
 
 
 def test_backoff_requeue_recovery():
-    mock_ioloop = _get_ioloop()
-    r = _get_reader(mock_ioloop, max_in_flight=2)
-    conn = _get_conn(r)
-    msg = _send_message(conn)
+    mock_ioloop = get_ioloop()
+    r = get_reader(mock_ioloop, max_in_flight=2)
+    conn = get_conn(r)
+    msg = send_message(conn)
 
     msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
     assert mock_ioloop.add_timeout.call_count == 1
 
-    msg = _send_message(conn)
+    msg = send_message(conn)
 
     # go into backoff
     msg.trigger(event.REQUEUE, message=msg)
@@ -184,7 +144,7 @@ def test_backoff_requeue_recovery():
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() != 0
 
-    msg = _send_message(conn)
+    msg = send_message(conn)
 
     # This should not move out of backoff (since backoff=False)
     msg.trigger(event.REQUEUE, message=msg, backoff=False)
@@ -199,7 +159,7 @@ def test_backoff_requeue_recovery():
     assert r.backoff_timer.get_interval() != 0
 
     # this should move out of backoff state
-    msg = _send_message(conn)
+    msg = send_message(conn)
     msg.trigger(event.FINISH, message=msg)
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
@@ -224,9 +184,9 @@ def test_backoff_requeue_recovery():
 
 
 def test_backoff_hard():
-    mock_ioloop = _get_ioloop()
-    r = _get_reader(io_loop=mock_ioloop)
-    conn = _get_conn(r)
+    mock_ioloop = get_ioloop()
+    r = get_reader(io_loop=mock_ioloop)
+    conn = get_conn(r)
 
     expected_args = [b'SUB test test\n', b'RDY 1\n', b'RDY 5\n']
 
@@ -234,7 +194,7 @@ def test_backoff_hard():
     fail = True
     last_timeout_time = 0
     for i in range(50):
-        msg = _send_message(conn)
+        msg = send_message(conn)
 
         if fail:
             msg.trigger(event.REQUEUE, message=msg)
@@ -265,7 +225,7 @@ def test_backoff_hard():
             fail = False
 
     for i in range(num_fails - 1):
-        msg = _send_message(conn)
+        msg = send_message(conn)
 
         msg.trigger(event.FINISH, message=msg)
         expected_args.append(b'RDY 0\n')
@@ -276,7 +236,7 @@ def test_backoff_hard():
             last_timeout_time = timeout_args[0]
         expected_args.append(b'RDY 1\n')
 
-    msg = _send_message(conn)
+    msg = send_message(conn)
 
     msg.trigger(event.FINISH, message=msg)
     expected_args.append(b'RDY 5\n')
@@ -291,13 +251,13 @@ def test_backoff_hard():
 
 
 def test_backoff_many_conns():
-    mock_ioloop = _get_ioloop()
-    r = _get_reader(io_loop=mock_ioloop)
+    mock_ioloop = get_ioloop()
+    r = get_reader(io_loop=mock_ioloop)
 
     num_conns = 5
     conns = []
     for i in range(num_conns):
-        conn = _get_conn(r)
+        conn = get_conn(r)
         conn.expected_args = [b'SUB test test\n', b'RDY 1\n']
         conn.fails = 0
         conns.append(conn)
@@ -307,7 +267,7 @@ def test_backoff_many_conns():
     last_timeout_time = 0
     conn = random.choice(conns)
     for i in range(50):
-        msg = _send_message(conn)
+        msg = send_message(conn)
 
         if r.backoff_timer.get_interval() == 0:
             conn.expected_args.append(b'RDY 1\n')
@@ -357,7 +317,7 @@ def test_backoff_many_conns():
             conn.expected_args.append(b'RDY 1\n')
             continue
 
-        msg = _send_message(conn)
+        msg = send_message(conn)
 
         msg.trigger(event.FINISH, message=msg)
         total_fails -= 1
@@ -390,13 +350,13 @@ def test_backoff_many_conns():
 
 
 def test_backoff_conns_disconnect():
-    mock_ioloop = _get_ioloop()
-    r = _get_reader(io_loop=mock_ioloop)
+    mock_ioloop = get_ioloop()
+    r = get_reader(io_loop=mock_ioloop)
 
     num_conns = 5
     conns = []
     for i in range(num_conns):
-        conn = _get_conn(r)
+        conn = get_conn(r)
         conn.expected_args = [b'SUB test test\n', b'RDY 1\n']
         conn.fails = 0
         conns.append(conn)
@@ -419,12 +379,12 @@ def test_backoff_conns_disconnect():
                     conn.expected_args.append(b'RDY 1\n')
                 continue
             else:
-                c = _get_conn(r)
+                c = get_conn(r)
                 c.expected_args = [b'SUB test test\n']
                 c.fails = 0
                 conns.append(c)
 
-        msg = _send_message(conn)
+        msg = send_message(conn)
 
         if r.backoff_timer.get_interval() == 0:
             conn.expected_args.append(b'RDY 1\n')
@@ -464,7 +424,7 @@ def test_backoff_conns_disconnect():
     while total_fails:
         print("%r: %d fails (%d total_fails)" % (conn, conn.fails, total_fails))
 
-        msg = _send_message(conn)
+        msg = send_message(conn)
 
         msg.trigger(event.FINISH, message=msg)
         total_fails -= 1
