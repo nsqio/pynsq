@@ -6,7 +6,6 @@ import time
 import functools
 import random
 import warnings
-import inspect
 
 try:
     import simplejson as json
@@ -24,6 +23,7 @@ from ._compat import to_bytes
 from ._compat import urlencode
 from ._compat import urlparse
 from ._compat import parse_qs
+from ._compat import signature
 from .backoff_timer import BackoffTimer
 from .client import Client
 from . import protocol
@@ -208,7 +208,7 @@ class Reader(Client):
         self.random_rdy_ts = time.time()
 
         # Verify keyword arguments
-        valid_args = inspect.getargspec(async.AsyncConn.__init__)[0]
+        valid_args = signature(async.AsyncConn.__init__)[0]
         diff = set(kwargs) - set(valid_args)
         assert len(diff) == 0, 'Invalid keyword argument(s): %s' % list(diff)
 

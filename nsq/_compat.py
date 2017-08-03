@@ -64,3 +64,8 @@ except ImportError:
     import urlparse
     from urllib import urlencode
     from cgi import parse_qs
+
+try:
+    from inspect import getargspec as signature
+except ImportError:
+    from inspect import signature
