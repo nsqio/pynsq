@@ -59,7 +59,8 @@ struct_h = _create_struct('>h')
 
 try:
     from urllib import parse as urlparse
-    from urllib.parse import urlencode
+    from urllib.parse import urlencode, parse_qs
 except ImportError:
     import urlparse
     from urllib import urlencode
+    from cgi import parse_qs
