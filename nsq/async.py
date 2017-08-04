@@ -128,6 +128,9 @@ class AsyncConn(event.EventedMixin):
     :param msg_timeout: the amount of time (in seconds) that nsqd will wait
         before considering messages that have been delivered to this
         consumer timed out (requires nsqd 0.2.28+)
+
+    :param hostname: a string identifying the host where this client runs
+        (default: ``<hostname>``)
     """
     def __init__(
             self,
@@ -147,7 +150,8 @@ class AsyncConn(event.EventedMixin):
             sample_rate=0,
             io_loop=None,
             auth_secret=None,
-            msg_timeout=None):
+            msg_timeout=None,
+            hostname=None):
         assert isinstance(host, string_types)
         assert isinstance(port, int)
         assert isinstance(timeout, float)
@@ -180,7 +184,9 @@ class AsyncConn(event.EventedMixin):
         self.snappy = snappy
         self.deflate = deflate
         self.deflate_level = deflate_level
-        self.hostname = socket.gethostname()
+        self.hostname = hostname
+        if self.hostname is None:
+            self.hostname = socket.gethostname()
         self.short_hostname = self.hostname.split('.')[0]
         self.heartbeat_interval = heartbeat_interval * 1000
         self.msg_timeout = int(msg_timeout * 1000) if msg_timeout else None
