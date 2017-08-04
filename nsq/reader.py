@@ -5,9 +5,7 @@ import logging
 import time
 import functools
 import random
-import cgi
 import warnings
-import inspect
 
 try:
     import simplejson as json
@@ -24,6 +22,8 @@ from ._compat import string_types
 from ._compat import to_bytes
 from ._compat import urlencode
 from ._compat import urlparse
+from ._compat import parse_qs
+from ._compat import signature
 from .backoff_timer import BackoffTimer
 from .client import Client
 from . import protocol
@@ -208,7 +208,7 @@ class Reader(Client):
         self.random_rdy_ts = time.time()
 
         # Verify keyword arguments
-        valid_args = inspect.getargspec(async.AsyncConn.__init__)[0]
+        valid_args = signature(async.AsyncConn.__init__)[0]
         diff = set(kwargs) - set(valid_args)
         assert len(diff) == 0, 'Invalid keyword argument(s): %s' % list(diff)
 
@@ -570,7 +570,7 @@ class Reader(Client):
         if not path or path == "/":
             path = "/lookup"
 
-        params = cgi.parse_qs(query)
+        params = parse_qs(query)
         params['topic'] = self.topic
         query = urlencode(_utf8_params(params), doseq=1)
         lookupd_url = urlparse.urlunsplit((scheme, netloc, path, query, fragment))

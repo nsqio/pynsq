@@ -5,9 +5,9 @@ import logging
 import time
 import functools
 import random
-import inspect
 
 from ._compat import string_types
+from ._compat import signature
 from .client import Client
 from nsq import protocol
 from . import async
@@ -96,7 +96,7 @@ class Writer(Client):
         self.conns = {}
 
         # Verify keyword arguments
-        valid_args = inspect.getargspec(async.AsyncConn.__init__)[0]
+        valid_args = signature(async.AsyncConn.__init__)[0]
         diff = set(kwargs) - set(valid_args)
         assert len(diff) == 0, 'Invalid keyword argument(s): %s' % list(diff)
 
