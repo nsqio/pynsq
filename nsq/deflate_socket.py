@@ -39,6 +39,9 @@ class DeflateSocket(object):
         return uncompressed
 
     def send(self, data):
-        chunk = self._compressor.compress(data)
+        if isinstance(data, memoryview):
+            chunk = self._compressor.compress(str(data))
+        else:
+            chunk = self._compressor.compress(data)
         self._socket.send(chunk + self._compressor.flush(zlib.Z_SYNC_FLUSH))
         return len(data)
