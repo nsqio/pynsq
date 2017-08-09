@@ -40,7 +40,7 @@ class DeflateSocket(object):
 
     def send(self, data):
         if isinstance(data, memoryview):
-            chunk = self._compressor.compress(str(data))
+            chunk = self._compressor.compress(data.tobytes())
         else:
             chunk = self._compressor.compress(data)
         self._socket.send(chunk + self._compressor.flush(zlib.Z_SYNC_FLUSH))
