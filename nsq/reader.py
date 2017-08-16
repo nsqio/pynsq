@@ -23,7 +23,7 @@ from ._compat import to_bytes
 from ._compat import urlencode
 from ._compat import urlparse
 from ._compat import parse_qs
-from ._compat import signature
+from ._compat import func_args
 from .backoff_timer import BackoffTimer
 from .client import Client
 from . import protocol
@@ -208,7 +208,7 @@ class Reader(Client):
         self.random_rdy_ts = time.time()
 
         # Verify keyword arguments
-        valid_args = signature(async.AsyncConn.__init__)[0]
+        valid_args = func_args(async.AsyncConn.__init__)
         diff = set(kwargs) - set(valid_args)
         assert len(diff) == 0, 'Invalid keyword argument(s): %s' % list(diff)
 
