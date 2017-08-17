@@ -66,6 +66,13 @@ except ImportError:
     from cgi import parse_qs
 
 try:
-    from inspect import getargspec as signature
-except ImportError:
     from inspect import signature
+    def func_args(func):
+        items = signature(func).parameters.values()
+        return [param.name for param in items
+                if param.kind == param.POSITIONAL_OR_KEYWORD]
+except ImportError:
+    # inspect.getargspec is deprecated since 3.5
+    from inspect import getargspec
+    def func_args(func):
+        return getargspec(func).args
