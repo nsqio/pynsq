@@ -2,11 +2,14 @@ language: python
 python:
   - 2.7
   - 3.5
+  - 3.6
 env:
-  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=3.2.2
-  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.4.2
-  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=3.2.2
-  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=4.4.2
+  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.1.0
+  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.4.3
+  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.5.2
+  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=4.1.0
+  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=4.4.3
+  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=4.5.2
 script:
   - ./travis_test.sh
 notifications:
