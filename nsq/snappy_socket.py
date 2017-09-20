@@ -37,6 +37,8 @@ class SnappySocket(object):
         return uncompressed
 
     def send(self, data):
+        if isinstance(data, memoryview):
+            data = data.tobytes()
         chunk = self._compressor.add_chunk(data, compress=True)
         self._socket.send(chunk)
         return len(data)

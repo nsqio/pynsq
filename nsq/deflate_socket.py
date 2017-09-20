@@ -32,13 +32,14 @@ class DeflateSocket(object):
             self._bootstrapped = None
             return data
         chunk = method(size)
-        if chunk:
-            uncompressed = self._decompressor.decompress(chunk)
+        uncompressed = self._decompressor.decompress(chunk) if chunk else None
         if not uncompressed:
             raise socket.error(errno.EWOULDBLOCK)
         return uncompressed
 
     def send(self, data):
+        if isinstance(data, memoryview):
+            data = data.tobytes()
         chunk = self._compressor.compress(data)
         self._socket.send(chunk + self._compressor.flush(zlib.Z_SYNC_FLUSH))
         return len(data)
