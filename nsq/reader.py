@@ -123,7 +123,7 @@ class Reader(Client):
         introduced in order to add jitter when multiple readers are running
 
     :param lookupd_poll_jitter: The maximum fractional amount of jitter to add to the
-        lookupd pool loop. This helps evenly distribute requests even if multiple consumers
+        lookupd poll loop. This helps evenly distribute requests even if multiple consumers
         restart at the same time.
 
     :param lookupd_connect_timeout: the amount of time in seconds to wait for
