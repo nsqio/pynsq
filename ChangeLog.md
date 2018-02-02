@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.2 - 2018-02-01
+
+ * #195 - compatibility with tornado 4.5 (thanks @ayamnikov)
+ * #189/#192 - address Python deprecation warnings (thanks @misja)
+ * #188 - add ability to specify custom hostname (thanks @andyxning)
+ * #183 - ensure per-connection RDY counts are updated when connections change (thanks @alpaker)
+ * #184 - fix zero delay to time_ms in Message.requeue() (thanks @checkraise)
+
 ## 0.8.1 - 2017-06-01
 
  * #177/#179 - improved RDY handling; don't decrement RDY; prevent edge case max in flight violations (thanks @alpaker)
