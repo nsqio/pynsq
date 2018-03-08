@@ -5,7 +5,7 @@ import time
 import socket
 import logging
 
-from ._compat import string_types
+from ._compat import bytes_types, string_types
 from ._compat import struct_l
 from .version import __version__
 
@@ -122,7 +122,7 @@ class AsyncConn(event.EventedMixin):
         in the spirit of HTTP (default: ``<client_library_name>/<version>``)
         (requires nsqd 0.2.25+)
 
-    :param auth_secret: a string passed when using nsq auth
+    :param auth_secret: a byte string passed when using nsq auth
         (requires nsqd 1.0+)
 
     :param msg_timeout: the amount of time (in seconds) that nsqd will wait
@@ -162,7 +162,7 @@ class AsyncConn(event.EventedMixin):
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
-        assert isinstance(auth_secret, string_types + (None.__class__,))
+        assert isinstance(auth_secret, bytes_types + (None.__class__,))
         assert tls_v1 and ssl or not tls_v1, \
             'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
         assert msg_timeout is None or (isinstance(msg_timeout, (float, int)) and msg_timeout > 0)
