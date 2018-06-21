@@ -8,7 +8,6 @@ import errno
 class SnappySocket(object):
     def __init__(self, socket):
         self._decompressor = snappy.StreamDecompressor()
-        self._compressor = snappy.StreamCompressor()
         self._socket = socket
         self._bootstrapped = None
 
@@ -37,8 +36,11 @@ class SnappySocket(object):
         return uncompressed
 
     def send(self, data):
-        if isinstance(data, memoryview):
-            data = data.tobytes()
-        chunk = self._compressor.add_chunk(data, compress=True)
-        self._socket.send(chunk)
-        return len(data)
+        return self._socket.send(data)
+
+
+class SnappyEncoder(object):
+
+    @staticmethod
+    def encode(data):
+        return snappy.StreamCompressor().compress(data)

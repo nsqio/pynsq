@@ -15,9 +15,9 @@ except ImportError:
     ssl = None  # pyflakes.ignore
 
 try:
-    from .snappy_socket import SnappySocket
+    from .snappy_socket import SnappySocket, SnappyEncoder
 except ImportError:
-    SnappySocket = None  # pyflakes.ignore
+    SnappyEncoder = SnappySocket = None  # pyflakes.ignore
 
 try:
     import simplejson as json
@@ -37,7 +37,7 @@ except ImportError:
         return _DEFAULT_CA_CERTS
 
 from nsq import event, protocol
-from .deflate_socket import DeflateSocket
+from .deflate_socket import DeflateSocket, DeflateEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,13 @@ CONNECTED = 'CONNECTED'
 
 
 DEFAULT_USER_AGENT = 'pynsq/%s' % __version__
+
+
+class DefaultEncoder(object):
+
+    @staticmethod
+    def encode(data):
+        return data
 
 
 class AsyncConn(event.EventedMixin):
@@ -211,6 +218,7 @@ class AsyncConn(event.EventedMixin):
         self.rdy = 0
 
         self.callback_queue = []
+        self.encoder = DefaultEncoder()
 
         super(AsyncConn, self).__init__()
 
@@ -296,7 +304,7 @@ class AsyncConn(event.EventedMixin):
         self._start_read()
 
     def send(self, data):
-        self.stream.write(data)
+        self.stream.write(self.encoder.encode(data))
 
     def upgrade_to_tls(self, options=None):
         assert ssl, 'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
@@ -337,6 +345,7 @@ class AsyncConn(event.EventedMixin):
         self.socket = SnappySocket(self.socket)
         self.socket.bootstrap(existing_data)
         self.stream.socket = self.socket
+        self.encoder = SnappyEncoder()
 
     def upgrade_to_deflate(self):
         # in order to upgrade to DEFLATE we need to use whatever IOStream
@@ -350,6 +359,7 @@ class AsyncConn(event.EventedMixin):
         self.socket = DeflateSocket(self.socket, self.deflate_level)
         self.socket.bootstrap(existing_data)
         self.stream.socket = self.socket
+        self.encoder = DeflateEncoder(level=self.deflate_level)
 
     def send_rdy(self, value):
         try:
