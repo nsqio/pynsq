@@ -30,7 +30,9 @@ class DeflateSocket(object):
             self._bootstrapped = None
             return data
         chunk = method(size)
-        uncompressed = self._decompressor.decompress(chunk) if chunk else None
+        if not chunk:
+            return chunk
+        uncompressed = self._decompressor.decompress(chunk)
         if not uncompressed:
             raise socket.error(errno.EWOULDBLOCK)
         return uncompressed
