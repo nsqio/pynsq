@@ -13,7 +13,7 @@ if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
 from nsq._compat import struct_l
-from nsq.async import AsyncConn
+from nsq.conn import AsyncConn
 from nsq import protocol
 
 
@@ -34,8 +34,8 @@ def _get_test_conn(io_loop=None):
 #
 #   https://github.com/testing-cabal/mock/issues/323
 #
-@patch('nsq.async.socket')
-@patch('nsq.async.tornado.iostream.IOStream', autospec=True)
+@patch('nsq.conn.socket')
+@patch('nsq.conn.tornado.iostream.IOStream', autospec=True)
 def test_connect(mock_iostream, mock_socket):
     conn = _get_test_conn()
     conn.connect()

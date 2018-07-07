@@ -22,8 +22,8 @@ from ._compat import parse_qs
 from ._compat import func_args
 from .backoff_timer import BackoffTimer
 from .client import Client
+from .conn import AsyncConn
 from . import protocol
-from . import async
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +204,7 @@ class Reader(Client):
         self.random_rdy_ts = time.time()
 
         # Verify keyword arguments
-        valid_args = func_args(async.AsyncConn.__init__)
+        valid_args = func_args(AsyncConn.__init__)
         diff = set(kwargs) - set(valid_args)
         assert len(diff) == 0, 'Invalid keyword argument(s): %s' % list(diff)
 
@@ -458,7 +458,7 @@ class Reader(Client):
         assert isinstance(host, string_types)
         assert isinstance(port, int)
 
-        conn = async.AsyncConn(host, port, **self.conn_kwargs)
+        conn = AsyncConn(host, port, **self.conn_kwargs)
         conn.on('identify', self._on_connection_identify)
         conn.on('identify_response', self._on_connection_identify_response)
         conn.on('auth', self._on_connection_auth)
