@@ -26,7 +26,6 @@ echo "travis_fold:start:install.snappy"
 install_snappy
 echo "travis_fold:end:install.snappy"
 echo "travis_fold:start:install.pythondeps"
-pip install simplejson
 pip install certifi
 pip install tornado=="$TORNADO_VERSION"
 PYCURL_SSL_LIBRARY=openssl pip install pycurl

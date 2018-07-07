@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+import json
 import time
 import socket
 import logging
@@ -18,11 +19,6 @@ try:
     from .snappy_socket import SnappySocket, SnappyEncoder
 except ImportError:
     SnappyEncoder = SnappySocket = None  # pyflakes.ignore
-
-try:
-    import simplejson as json
-except ImportError:
-    import json  # pyflakes.ignore
 
 import tornado.iostream
 import tornado.ioloop
