@@ -1,17 +1,38 @@
 language: python
-python:
-  - 2.7
-  - 3.5
-  - 3.6
-env:
-  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.1.0
-  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.4.3
-  - NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2 TORNADO_VERSION=4.5.2
-  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=4.1.0
-  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=4.4.3
-  - NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8 TORNADO_VERSION=4.5.2
+sudo: false
+matrix:
+  include:
+  - python: "2.7"
+    env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2
+  - python: "2.7"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2
+  - python: "2.7"
+    env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+  - python: "2.7"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+
+  - python: "3.4"
+    env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2
+  - python: "3.4"
+    env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+  - python: "3.4"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+
+  - python: "3.5"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2
+  - python: "3.5"
+    env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+  - python: "3.5"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+
+  - python: "3.6"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2
+  - python: "3.6"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+    dist: xenial
+    sudo: true
+
 script:
   - ./travis_test.sh
 notifications:
   email: false
-sudo: false

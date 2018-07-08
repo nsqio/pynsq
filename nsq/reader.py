@@ -6,11 +6,7 @@ import time
 import functools
 import random
 import warnings
-
-try:
-    import simplejson as json
-except ImportError:
-    import json  # pyflakes.ignore
+import json
 
 from tornado.ioloop import PeriodicCallback
 import tornado.httpclient

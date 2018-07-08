@@ -1,11 +1,8 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
-import re
 
-try:
-    import simplejson as json
-except ImportError:
-    import json  # pyflakes.ignore
+import re
+import json
 
 from ._compat import bytes_types
 from ._compat import to_bytes

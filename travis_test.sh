@@ -11,11 +11,9 @@ install_snappy () {
     # install snappy from source so we can compile with `-fPIC` witout having to sudo install stuff
     git clone https://github.com/google/snappy.git
     cd snappy
-    git checkout 1.1.4
-    sh autogen.sh
-    mkdir -p "$HOME/usr/local"
-    ./configure --prefix="$HOME/usr/local"
-    CFLAGS="-fPIC" make
+    git checkout 1.1.7
+    CFLAGS="-fPIC" CXXFLAGS="-fPIC" \
+        cmake -DCMAKE_INSTALL_PREFIX="$HOME/usr/local"
     make install
     cd ..
 }
@@ -28,7 +26,6 @@ echo "travis_fold:start:install.snappy"
 install_snappy
 echo "travis_fold:end:install.snappy"
 echo "travis_fold:start:install.pythondeps"
-pip install simplejson
 pip install certifi
 pip install tornado=="$TORNADO_VERSION"
 PYCURL_SSL_LIBRARY=openssl pip install pycurl

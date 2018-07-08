@@ -4,11 +4,7 @@ from __future__ import unicode_literals
 import pytest
 import os
 import sys
-
-try:
-    import simplejson as json
-except ImportError:
-    import json  # pyflakes.ignore
+import json
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))

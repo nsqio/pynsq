@@ -24,7 +24,7 @@ def mock_response_write(c, frame_type, data):
 def mock_response_write_message(c, timestamp, attempts, id, body):
     timestamp_packed = struct_q.pack(timestamp)
     attempts_packed = struct_h.pack(attempts)
-    id = b"%016d" % id
+    id = ("%016d" % id).encode()
     mock_response_write(
         c, protocol.FRAME_TYPE_MESSAGE, timestamp_packed + attempts_packed + id + body)
 
@@ -74,7 +74,7 @@ def test_sync_receive_messages():
 
     for i in range(10):
         c.send(protocol.ready(1))
-        body = b'{"data": {"test_key": %d}}' % i
+        body = ('{"data": {"test_key": %d}}' % i).encode()
         ts = int(time.time() * 1000 * 1000)
         mock_response_write_message(c, ts, 0, i, body)
         resp = c.read_response()
@@ -82,6 +82,6 @@ def test_sync_receive_messages():
         assert unpacked[0] == protocol.FRAME_TYPE_MESSAGE
         msg = protocol.decode_message(unpacked[1])
         assert msg.timestamp == ts
-        assert msg.id == b"%016d" % i
+        assert msg.id == ("%016d" % i).encode()
         assert msg.attempts == 0
         assert msg.body == body
