@@ -30,7 +30,7 @@ from .conn import AsyncConn
 from .reader import Reader
 from .legacy_reader import LegacyReader
 from .writer import Writer
-from .version import __version__  # NOQA
+from .version import __version__  # noqa: F401
 
 
 def _handle_term_signal(sig_num, frame):

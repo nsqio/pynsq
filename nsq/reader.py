@@ -599,7 +599,7 @@ class Reader(Client):
             self.connect_to_nsqd(address, producer['tcp_port'])
 
     def set_max_in_flight(self, max_in_flight):
-        """dynamically adjust the reader max_in_flight count. Set to 0 to immediately disable a Reader"""
+        """Dynamically adjust the reader max_in_flight. Set to 0 to immediately disable a Reader"""
         assert isinstance(max_in_flight, int)
         self.max_in_flight = max_in_flight
 
@@ -671,9 +671,10 @@ class Reader(Client):
             # waiting to hit the idle timeout, in which case it's ok to do nothing.
             in_flight = [c for c in conns if c.in_flight]
             if in_flight and not available_rdy:
-                c = random.choice(in_flight)
-                logger.info('[%s:%s] too many msgs in flight, giving up RDY count', c.id, self.name)
-                self._send_rdy(c, 0)
+                conn = random.choice(in_flight)
+                logger.info('[%s:%s] too many msgs in flight, giving up RDY count',
+                            conn.id, self.name)
+                self._send_rdy(conn, 0)
 
             # randomly walk the list of possible connections and send RDY 1 (up to our
             # calculated "max_in_flight").  We only need to send RDY 1 because in both
@@ -726,14 +727,12 @@ class Reader(Client):
                 def cast(x):
                     try:
                         return int(x)
-                    except:
+                    except Exception:
                         return x
                 return [cast(x) for x in v.replace('-', '.').split('.')]
 
             if self.disabled.__code__ != Reader.disabled.__code__ and \
                semver(data['version']) >= semver('0.3'):
-                logging.warning('disabled() deprecated and incompatible with nsqd >= 0.3. ' +
-                                'It will be removed in a future release. Use set_max_in_flight(0) instead')
                 warnings.warn('disabled() is deprecated and will be removed in a future release, ' +
                               'use set_max_in_flight(0) instead', DeprecationWarning)
         return super(Reader, self)._on_connection_identify_response(conn, data, **kwargs)

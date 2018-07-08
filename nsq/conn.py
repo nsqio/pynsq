@@ -374,8 +374,8 @@ class AsyncConn(event.EventedMixin):
 
     def _on_connect(self, **kwargs):
         identify_data = {
-            'short_id': self.short_hostname, # TODO remove when deprecating pre 1.0 support
-            'long_id': self.hostname, # TODO remove when deprecating pre 1.0 support
+            'short_id': self.short_hostname,  # TODO remove when deprecating pre 1.0 support
+            'long_id': self.hostname,  # TODO remove when deprecating pre 1.0 support
             'client_id': self.short_hostname,
             'hostname': self.hostname,
             'heartbeat_interval': self.heartbeat_interval,

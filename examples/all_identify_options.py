@@ -5,7 +5,7 @@ import tornado.options
 
 
 def handler(msg):
-    print msg.body
+    print(msg.body)
     return True
 
 

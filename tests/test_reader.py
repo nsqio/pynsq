@@ -57,7 +57,7 @@ class IntegrationBase(tornado.testing.AsyncTestCase):
                 if resp.body == b'OK':
                     break
                 continue
-            except:
+            except Exception:
                 if time.time() - start > 5:
                     raise
                 time.sleep(0.1)
@@ -93,7 +93,9 @@ class ReaderIntegrationTest(IntegrationBase):
         topic = 'test_reader_msgs_%s' % time.time()
         bad_options = dict(self.identify_options)
         bad_options.update(dict(foo=10))
-        handler = lambda x: None # noqa
+
+        def handler(msg):
+            return None
 
         self.assertRaises(
             AssertionError,
