@@ -1,5 +1,4 @@
 #!/bin/sh
-
 set -eu
 
 install_nsq () {
@@ -26,6 +25,7 @@ echo "travis_fold:start:install.snappy"
 install_snappy
 echo "travis_fold:end:install.snappy"
 echo "travis_fold:start:install.pythondeps"
+pip install flake8
 pip install certifi
 pip install tornado=="$TORNADO_VERSION"
 PYCURL_SSL_LIBRARY=openssl pip install pycurl
@@ -37,4 +37,9 @@ export PATH=$NSQ_DOWNLOAD/bin:$PATH
 export LD_LIBRARY_PATH=$HOME/usr/local/lib
 
 cd "$TRAVIS_BUILD_DIR"
+
 py.test
+
+echo
+flake8
+echo "flake8 OK"
