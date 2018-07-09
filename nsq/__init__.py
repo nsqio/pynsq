@@ -26,7 +26,7 @@ from .protocol import (
 from .message import Message
 from .backoff_timer import BackoffTimer
 from .sync import SyncConn
-from .async import AsyncConn
+from .conn import AsyncConn
 from .reader import Reader
 from .legacy_reader import LegacyReader
 from .writer import Writer

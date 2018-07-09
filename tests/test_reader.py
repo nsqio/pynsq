@@ -18,7 +18,7 @@ if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
 from nsq import protocol
-from nsq.async import AsyncConn
+from nsq.conn import AsyncConn
 from nsq.deflate_socket import DeflateSocket
 from nsq.reader import Reader
 from nsq.snappy_socket import SnappySocket

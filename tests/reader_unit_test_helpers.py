@@ -26,7 +26,7 @@ def get_ioloop():
 
 def get_conn(reader):
     global _conn_port
-    with patch('nsq.async.tornado.iostream.IOStream', autospec=True):
+    with patch('nsq.conn.tornado.iostream.IOStream', autospec=True):
         conn = reader.connect_to_nsqd('localhost', _conn_port)
     _conn_port += 1
     conn.trigger(event.READY, conn=conn)
