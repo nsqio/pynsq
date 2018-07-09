@@ -32,7 +32,7 @@ setup(
         version
     ),
     packages=['nsq'],
-    install_requires=['tornado<5.0'],
+    install_requires=['tornado'],
     include_package_data=True,
     zip_safe=False,
     tests_require=['pytest<4.0', 'mock', 'python-snappy', 'certifi'],
