@@ -28,9 +28,6 @@ if not PY2:
             return x.encode(charset, errors)
         raise TypeError('expected bytes or a string, not %r' % type(x))
 
-    def _create_struct(fmt):
-        return struct.Struct(fmt)
-
 else:
     bytes_types = (bytes, bytearray, buffer)
     text_type = unicode
@@ -47,15 +44,9 @@ else:
             return x.encode(charset, errors)
         raise TypeError('expected bytes or a string, not %r' % type(x))
 
-    # Python 2.6 has the rather unfortunate problem of raising a TypeError if
-    # you pass a unicode object as the `fmt` parameter. This shim can be
-    # removed when support for Python earlier than 2.7 is dropped.
-    def _create_struct(fmt):
-        return struct.Struct(str(fmt))
-
-struct_l = _create_struct('>l')
-struct_q = _create_struct('>q')
-struct_h = _create_struct('>h')
+struct_l = struct.Struct('>l')
+struct_q = struct.Struct('>q')
+struct_h = struct.Struct('>h')
 
 try:
     from urllib import parse as urlparse
