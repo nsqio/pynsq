@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+import ssl
 import json
 import time
 import socket
@@ -9,11 +10,6 @@ import logging
 from ._compat import string_types
 from ._compat import struct_l
 from .version import __version__
-
-try:
-    import ssl
-except ImportError:
-    ssl = None  # pyflakes.ignore
 
 try:
     from .snappy_socket import SnappySocket, SnappyEncoder
@@ -166,8 +162,6 @@ class AsyncConn(event.EventedMixin):
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
         assert isinstance(auth_secret, string_types + (None.__class__,))
-        assert tls_v1 and ssl or not tls_v1, \
-            'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
         assert msg_timeout is None or (isinstance(msg_timeout, (float, int)) and msg_timeout > 0)
 
         self.state = INIT
@@ -303,8 +297,6 @@ class AsyncConn(event.EventedMixin):
         self.stream.write(self.encoder.encode(data))
 
     def upgrade_to_tls(self, options=None):
-        assert ssl, 'tls_v1 requires Python 2.6+ or Python 2.5 w/ pip install ssl'
-
         # in order to upgrade to TLS we need to *replace* the IOStream...
         #
         # first remove the event handler for the currently open socket
