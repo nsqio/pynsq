@@ -4,6 +4,8 @@ from decimal import Decimal
 import os
 import sys
 
+import pytest
+
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 if base_dir not in sys.path:
@@ -13,30 +15,25 @@ from nsq import BackoffTimer
 from nsq import protocol
 
 
-def pytest_generate_tests(metafunc):
-    if metafunc.function == test_topic_names:
-        for name, good in [
-                ('valid_name', True),
-                ('invalid name with space', False),
-                ('invalid_name_due_to_length_this_is_really_really_really_really_long', False),
-                ('test-with_period.', True),
-                ('test#ephemeral', True),
-                ('test:ephemeral', False)]:
-            metafunc.addcall(funcargs=dict(name=name, good=good))
-    if metafunc.function == test_channel_names:
-        for name, good in [
-                ('test', True),
-                ('test-with_period.', True),
-                ('test#ephemeral', True),
-                ('invalid_name_due_to_length_this_is_really_really_really_really_long', False),
-                ('invalid name with space', False)]:
-            metafunc.addcall(funcargs=dict(name=name, good=good))
-
-
+@pytest.mark.parametrize(['name', 'good'], [
+    ('valid_name', True),
+    ('invalid name with space', False),
+    ('invalid_name_due_to_length_this_is_really_really_really_really_long', False),
+    ('test-with_period.', True),
+    ('test#ephemeral', True),
+    ('test:ephemeral', False),
+])
 def test_topic_names(name, good):
     assert protocol.valid_topic_name(name) == good
 
 
+@pytest.mark.parametrize(['name', 'good'], [
+    ('test', True),
+    ('test-with_period.', True),
+    ('test#ephemeral', True),
+    ('invalid_name_due_to_length_this_is_really_really_really_really_long', False),
+    ('invalid name with space', False),
+])
 def test_channel_names(name, good):
     assert protocol.valid_channel_name(name) == good
 

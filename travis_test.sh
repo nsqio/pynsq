@@ -26,6 +26,7 @@ install_snappy
 echo "travis_fold:end:install.snappy"
 echo "travis_fold:start:install.pythondeps"
 pip install flake8
+pip install pytest==3.6.3
 pip install certifi
 pip install tornado=="$TORNADO_VERSION"
 PYCURL_SSL_LIBRARY=openssl pip install pycurl
