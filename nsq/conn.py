@@ -7,8 +7,7 @@ import time
 import socket
 import logging
 
-from ._compat import string_types
-from ._compat import struct_l
+from ._compat import string_types, to_bytes, struct_l
 from .version import __version__
 
 try:
@@ -161,8 +160,8 @@ class AsyncConn(event.EventedMixin):
         assert isinstance(output_buffer_size, int) and output_buffer_size >= 0
         assert isinstance(output_buffer_timeout, int) and output_buffer_timeout >= 0
         assert isinstance(sample_rate, int) and sample_rate >= 0 and sample_rate < 100
-        assert isinstance(auth_secret, string_types + (None.__class__,))
         assert msg_timeout is None or (isinstance(msg_timeout, (float, int)) and msg_timeout > 0)
+        # auth_secret validated by to_bytes() below
 
         self.state = INIT
         self.host = host
@@ -198,7 +197,7 @@ class AsyncConn(event.EventedMixin):
         self.user_agent = user_agent
 
         self._authentication_required = False  # tracking server auth state
-        self.auth_secret = auth_secret
+        self.auth_secret = to_bytes(auth_secret) if auth_secret else None
 
         self.socket = None
         self.stream = None
