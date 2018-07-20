@@ -1,7 +1,11 @@
 from __future__ import absolute_import
 
+import time
+
 import nsq
 import unittest
+
+from .test_reader import IntegrationBase
 
 
 class WriterUnitTest(unittest.TestCase):
@@ -28,3 +32,35 @@ class WriterUnitTest(unittest.TestCase):
             nsqd_tcp_addresses=['127.0.0.1:4150'],
             reconnect_interval=15.0,
             name='test', **bad_options)
+
+
+class WriterIntegrationTest(IntegrationBase):
+    identify_options = {
+        'user_agent': 'sup',
+        'heartbeat_interval': 10,
+        'output_buffer_size': 4096,
+        'output_buffer_timeout': 50
+    }
+
+    nsqd_command = ['nsqd', '--verbose']
+
+    def test_writer_mpub_one(self):
+        topic = 'test_writer_mpub_%s' % time.time()
+
+        w = nsq.Writer(nsqd_tcp_addresses=['127.0.0.1:4150'], io_loop=self.io_loop,
+                       **self.identify_options)
+
+        def trypub():
+            w.mpub(topic, b'{"one": 1}', callback=pubcb)
+
+        def pubcb(conn, data):
+            if isinstance(data, nsq.protocol.Error):
+                if 'no open connections' in str(data):
+                    self.io_loop.call_later(0.1, trypub)
+                    return
+            self.stop(data)
+
+        self.io_loop.call_later(0.1, trypub)
+        result = self.wait()
+        print(str(result))
+        assert not isinstance(result, Exception)
