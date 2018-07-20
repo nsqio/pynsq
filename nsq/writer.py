@@ -7,6 +7,7 @@ import functools
 import random
 
 from ._compat import string_types
+from ._compat import bytes_types
 from ._compat import func_args
 from .client import Client
 from .conn import AsyncConn
@@ -115,7 +116,7 @@ class Writer(Client):
         self._pub('pub', topic, msg, callback=callback)
 
     def mpub(self, topic, msg, callback=None):
-        if isinstance(msg, string_types):
+        if isinstance(msg, bytes_types):
             msg = [msg]
         assert isinstance(msg, (list, set, tuple))
 
