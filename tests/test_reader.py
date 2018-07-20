@@ -11,6 +11,8 @@ import ssl
 
 import tornado.httpclient
 import tornado.testing
+import tornado.web
+import tornado.httpserver
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -293,3 +295,61 @@ class LookupdReaderIntegrationTest(IntegrationBase):
 
         self.wait()
         r.close()
+
+
+class AuthHandler(tornado.web.RequestHandler):
+    def get(self):
+        if self.get_argument('secret') == 'opensesame':
+            self.finish({
+                'ttl': 30,
+                'identity': 'username',
+                'authorizations': [{
+                    'permissions': ['subscribe'],
+                    'topic': 'authtopic',
+                    'channels': ['ch'],
+                }]
+            })
+        else:
+            self.set_status(403)
+
+
+class ReaderAuthIntegrationTest(IntegrationBase):
+    identify_options = {
+        'user_agent': 'supauth',
+        'heartbeat_interval': 10,
+        'output_buffer_size': 4096,
+        'output_buffer_timeout': 50,
+        'auth_secret': "opensesame",
+    }
+
+    def setUp(self):
+        auth_sock, auth_port = tornado.testing.bind_unused_port()
+        self.auth_sock = auth_sock
+        self.nsqd_command = [
+            'nsqd', '--verbose', '--auth-http-address=127.0.0.1:%d' % auth_port
+        ]
+        super(ReaderAuthIntegrationTest, self).setUp()
+
+    def tearDown(self):
+        super(ReaderAuthIntegrationTest, self).tearDown()
+        self.auth_sock.close()
+
+    def test_conn_identify(self):
+        auth_app = tornado.web.Application([("/auth", AuthHandler)])
+        auth_srv = tornado.httpserver.HTTPServer(auth_app, io_loop=self.io_loop)
+        auth_srv.add_socket(self.auth_sock)
+
+        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
+                      **self.identify_options)
+
+        def _on_ready(*args, **kwargs):
+            c.on('response', self.stop)
+            c.send(protocol.subscribe('authtopic', 'ch'))
+
+        c.on('ready', _on_ready)
+        c.connect()
+        response = self.wait()
+        auth_srv.stop()
+        print(response)
+        assert response['conn'] is c
+        assert response['data'] == b'OK'
