@@ -10,11 +10,11 @@ matrix:
     env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
   - python: "2.7"
     env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+  - python: "2.7"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.1.0-rc1.linux-amd64.go1.10.3
 
   - python: "3.4"
     env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2
-  - python: "3.4"
-    env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
   - python: "3.4"
     env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
 
@@ -23,7 +23,7 @@ matrix:
   - python: "3.5"
     env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
   - python: "3.5"
-    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+    env: TORNADO_VERSION=4.4.3 NSQ_DOWNLOAD=nsq-1.1.0-rc1.linux-amd64.go1.10.3
 
   - python: "3.6"
     env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-0.3.8.linux-amd64.go1.6.2
@@ -34,6 +34,10 @@ matrix:
 
   - python: "3.7"
     env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.0.0-compat.linux-amd64.go1.8
+    dist: xenial
+    sudo: true
+  - python: "3.7"
+    env: TORNADO_VERSION=4.5.3 NSQ_DOWNLOAD=nsq-1.1.0-rc1.linux-amd64.go1.10.3
     dist: xenial
     sudo: true
 
