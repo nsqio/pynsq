@@ -300,15 +300,17 @@ class AsyncConn(event.EventedMixin):
         #
         # first remove the event handler for the currently open socket
         # so that when we add the socket to the new SSLIOStream below,
-        # it can re-add the appropriate event handlers.
+        # it can re-add the appropriate event handlers. Default to TLSv1.2
+        # unless ssl_version is set otherwise.
         self.io_loop.remove_handler(self.socket.fileno())
 
         opts = {
             'cert_reqs': ssl.CERT_REQUIRED,
-            'ca_certs': default_ca_certs()
+            'ca_certs': default_ca_certs(),
+            'ssl_version': ssl.PROTOCOL_TLSv1_2
         }
         opts.update(options or {})
-        self.socket = ssl.wrap_socket(self.socket, ssl_version=ssl.PROTOCOL_TLSv1,
+        self.socket = ssl.wrap_socket(self.socket,
                                       do_handshake_on_connect=False, **opts)
 
         self.stream = tornado.iostream.SSLIOStream(self.socket, io_loop=self.io_loop)
