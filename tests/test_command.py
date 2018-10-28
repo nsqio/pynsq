@@ -28,13 +28,13 @@ mpub_body = struct_l.pack(len(msgs)) + b''.join(struct_l.pack(len(m)) + m for m 
 @pytest.mark.parametrize(['cmd_method', 'kwargs', 'result'], [
     pytest.param(protocol.identify,
                  {'data': identify_dict_ascii},
-                 b'IDENTIFY\n' + struct_l.pack(len(identify_body_ascii)) +
-                 to_bytes(identify_body_ascii),
+                 b'IDENTIFY\n' + struct_l.pack(len(identify_body_ascii))
+                 + to_bytes(identify_body_ascii),  # noqa: W503
                  id="identify-ascii"),
     pytest.param(protocol.identify,
                  {'data': identify_dict_unicode},
-                 b'IDENTIFY\n' + struct_l.pack(len(identify_body_unicode)) +
-                 to_bytes(identify_body_unicode),
+                 b'IDENTIFY\n' + struct_l.pack(len(identify_body_unicode))
+                 + to_bytes(identify_body_unicode),  # noqa: W503
                  id="identify-unicode"),
     pytest.param(protocol.subscribe,
                  {'topic': 'test_topic', 'channel': 'test_channel'},

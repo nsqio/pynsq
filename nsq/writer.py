@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class Writer(Client):
-    """
+    r"""
     A high-level producer class built on top of the `Tornado IOLoop <http://tornadoweb.org>`_
     supporting async publishing (``PUB`` & ``MPUB`` & ``DPUB``) of messages
     to ``nsqd`` over the TCP protocol.

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class Reader(Client):
-    """
+    r"""
     Reader provides high-level functionality for building robust NSQ consumers in Python
     on top of the async module.
 
@@ -733,7 +733,7 @@ class Reader(Client):
 
             if self.disabled.__code__ != Reader.disabled.__code__ and \
                semver(data['version']) >= semver('0.3'):
-                warnings.warn('disabled() is deprecated and will be removed in a future release, ' +
+                warnings.warn('disabled() is deprecated and will be removed in a future release, '
                               'use set_max_in_flight(0) instead', DeprecationWarning)
         return super(Reader, self)._on_connection_identify_response(conn, data, **kwargs)
 
