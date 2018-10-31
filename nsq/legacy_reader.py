@@ -17,8 +17,8 @@ class LegacyReader(object):
         from nsq import LegacyReader as Reader
     """
     def __init__(self, *args, **kwargs):
-        warnings.warn('LegacyReader is a deprecated wrapper and will be removed in a future' +
-                      ' release.  Use (multiple) Reader(s) each with their own' +
+        warnings.warn('LegacyReader is a deprecated wrapper and will be removed in a future'
+                      ' release.  Use (multiple) Reader(s) each with their own'
                       ' message handler.', DeprecationWarning)
 
         old_params = {}

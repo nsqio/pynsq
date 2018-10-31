@@ -48,7 +48,7 @@ if __name__ == "__main__":
     assert tornado.options.options.destination_nsqd_tcp_address
     assert tornado.options.options.channel
 
-    destination_topic = str(tornado.options.options.destination_topic or
+    destination_topic = str(tornado.options.options.destination_topic or  # noqa: W504
                             tornado.options.options.topic)
     lookupd_http_addresses = map(lambda addr: 'http://' + addr,
                                  tornado.options.options.lookupd_http_address)

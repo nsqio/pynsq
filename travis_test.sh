@@ -1,11 +1,6 @@
 #!/bin/sh
 set -eu
 
-install_nsq () {
-    wget "http://bitly-downloads.s3.amazonaws.com/nsq/$NSQ_DOWNLOAD.tar.gz"
-    tar zxvf "$NSQ_DOWNLOAD.tar.gz"
-}
-
 install_snappy () {
     # install snappy from source so we can compile with `-fPIC` witout having to sudo install stuff
     git clone https://github.com/google/snappy.git
@@ -18,19 +13,19 @@ install_snappy () {
 }
 
 echo "travis_fold:start:install.nsq"
-install_nsq
+wget "http://bitly-downloads.s3.amazonaws.com/nsq/$NSQ_DOWNLOAD.tar.gz"
+tar zxvf "$NSQ_DOWNLOAD.tar.gz"
 echo "travis_fold:end:install.nsq"
 
 echo "travis_fold:start:install.snappy"
 install_snappy
 echo "travis_fold:end:install.snappy"
+
 echo "travis_fold:start:install.pythondeps"
-pip install flake8
-pip install pytest==3.6.3
-pip install certifi
-pip install tornado=="$TORNADO_VERSION"
+pip install pytest==3.6.3 flake8==3.6.0 certifi
 PYCURL_SSL_LIBRARY=openssl pip install pycurl
 CPPFLAGS="-I$HOME/usr/local/include -L$HOME/usr/local/lib -fPIC" pip install python-snappy
+pip install tornado=="$TORNADO_VERSION"
 echo "travis_fold:end:install.pythondeps"
 
 # Finally, run some tests!
