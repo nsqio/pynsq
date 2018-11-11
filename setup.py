@@ -16,7 +16,7 @@ class PyTest(TestCommand):
 
 
 # also update in nsq/version.py
-version = '0.8.3-alpha'
+version = '0.8.3'
 
 
 setup(

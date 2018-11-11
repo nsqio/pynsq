@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.3 - 2018-11-11
+
+ * #223 - update default TLS version to 1.2 and support overriding via tls_options (thanks @duczen)
+ * #219 - fix py.test deprecated parameterization
+ * #217/#218 - python 3 fixes (`mpub`, `AsyncConn`)
+ * #214 - remove python 2.6 support
+ * #216 - update PyPI address in docs (thanks @aaronjheng)
+ * #212 - fix python 3.7 `async` keyword conflict
+ * #211/#213/#220/#225 - misc test/CI related fixes
+ * #210 - fix snappy/deflate high CPU load on disconnection (thanks @zexxonn)
+ * #208 - fix sending snappy/deflate compressed data (thanks @SpaTmole)
+ * #201 - specify tornado version in setup (thanks @jphines)
+ * #200 - update URL for NSQ protocol in docs (thanks @mecforlove)
+
 ## 0.8.2 - 2018-02-01
 
  * #195 - compatibility with tornado 4.5 (thanks @ayamnikov)
