@@ -55,12 +55,12 @@ class Writer(Client):
 
             def get(self):
                 topic = 'log'
-                msg = 'Hello world'
-                msg_cn = 'Hello 世界'
+                msg = b'Hello world'
+                msg_cn = u'Hello 世界'.encode('utf-8')
 
-                self.nsq.pub(topic, msg) # pub
-                self.nsq.mpub(topic, [msg, msg_cn]) # mpub
-                self.nsq.dpub(topic, 60, msg) # dpub
+                self.nsq.pub(topic, msg)
+                self.nsq.mpub(topic, [msg, msg_cn])
+                self.nsq.dpub(topic, 60000, msg)
 
                 # customize callback
                 callback = functools.partial(self.finish_pub, topic=topic, msg=msg)
@@ -71,6 +71,7 @@ class Writer(Client):
             def finish_pub(self, conn, data, topic, msg):
                 if isinstance(data, Error):
                     # try to re-pub message again if pub failed
+                    # (missing functionality: delay retry, limit attempts)
                     self.nsq.pub(topic, msg)
 
         class Application(tornado.web.Application):
@@ -113,9 +114,23 @@ class Writer(Client):
         self.connect()
 
     def pub(self, topic, msg, callback=None):
+        """
+        publish a message to nsq
+
+        :param topic: nsq topic
+        :param msg: message body (bytes)
+        :param callback: function which takes (conn, data) (data may be nsq.Error)
+        """
         self._pub('pub', topic, msg, callback=callback)
 
     def mpub(self, topic, msg, callback=None):
+        """
+        publish multiple messages in one command (efficiently)
+
+        :param topic: nsq topic
+        :param msg: list of messages bodies (which are bytes)
+        :param callback: function which takes (conn, data) (data may be nsq.Error)
+        """
         if isinstance(msg, bytes_types):
             msg = [msg]
         assert isinstance(msg, (list, set, tuple))
@@ -123,6 +138,14 @@ class Writer(Client):
         self._pub('mpub', topic, msg, callback=callback)
 
     def dpub(self, topic, delay_ms, msg, callback=None):
+        """
+        publish multiple messages in one command (efficiently)
+
+        :param topic: nsq topic
+        :param delay_ms: tell nsqd to delay delivery for this long (integer milliseconds)
+        :param msg: message body (bytes)
+        :param callback: function which takes (conn, data) (data may be nsq.Error)
+        """
         self._pub('dpub', topic, msg, delay_ms, callback=callback)
 
     def _pub(self, command, topic, msg, delay_ms=None, callback=None):
