@@ -442,9 +442,6 @@ class Reader(Client):
             value = conn.max_rdy_count
 
         new_rdy = max(self.total_rdy - conn.rdy + value, 0)
-        if new_rdy > self.max_in_flight:
-            return
-
         if conn.send_rdy(value):
             self.total_rdy = new_rdy
 
