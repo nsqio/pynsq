@@ -18,15 +18,6 @@ except ImportError:
 import tornado.iostream
 import tornado.ioloop
 
-try:
-    from tornado.simple_httpclient import _default_ca_certs as default_ca_certs
-except ImportError:
-    # Tornado < 4
-    from tornado.simple_httpclient import _DEFAULT_CA_CERTS
-
-    def default_ca_certs():
-        return _DEFAULT_CA_CERTS
-
 from nsq import event, protocol
 from .deflate_socket import DeflateSocket, DeflateEncoder
 
@@ -146,7 +137,6 @@ class AsyncConn(event.EventedMixin):
             output_buffer_size=16 * 1024,
             output_buffer_timeout=250,
             sample_rate=0,
-            io_loop=None,
             auth_secret=None,
             msg_timeout=None,
             hostname=None):
@@ -187,9 +177,6 @@ class AsyncConn(event.EventedMixin):
         self.heartbeat_interval = heartbeat_interval * 1000
         self.msg_timeout = int(msg_timeout * 1000) if msg_timeout else None
         self.requeue_delay = requeue_delay
-        self.io_loop = io_loop
-        if not self.io_loop:
-            self.io_loop = tornado.ioloop.IOLoop.instance()
 
         self.output_buffer_size = output_buffer_size
         self.output_buffer_timeout = output_buffer_timeout
@@ -235,7 +222,7 @@ class AsyncConn(event.EventedMixin):
         self.socket.settimeout(self.timeout)
         self.socket.setblocking(0)
 
-        self.stream = tornado.iostream.IOStream(self.socket, io_loop=self.io_loop)
+        self.stream = tornado.iostream.IOStream(self.socket)
         self.stream.set_close_callback(self._socket_close)
         self.stream.set_nodelay(True)
 
@@ -263,6 +250,8 @@ class AsyncConn(event.EventedMixin):
             )
 
     def _start_read(self):
+        if self.stream is None:
+            return  # IOStream.start_tls() invalidates stream, will call again when ready
         self._read_bytes(4, self._read_size)
 
     def _socket_close(self):
@@ -297,28 +286,29 @@ class AsyncConn(event.EventedMixin):
 
     def upgrade_to_tls(self, options=None):
         # in order to upgrade to TLS we need to *replace* the IOStream...
-        #
-        # first remove the event handler for the currently open socket
-        # so that when we add the socket to the new SSLIOStream below,
-        # it can re-add the appropriate event handlers. Default to TLSv1.2
-        # unless ssl_version is set otherwise.
-        self.io_loop.remove_handler(self.socket.fileno())
-
         opts = {
             'cert_reqs': ssl.CERT_REQUIRED,
-            'ca_certs': default_ca_certs(),
             'ssl_version': ssl.PROTOCOL_TLSv1_2
         }
         opts.update(options or {})
-        self.socket = ssl.wrap_socket(self.socket,
-                                      do_handshake_on_connect=False, **opts)
 
-        self.stream = tornado.iostream.SSLIOStream(self.socket, io_loop=self.io_loop)
-        self.stream.set_close_callback(self._socket_close)
+        fut = self.stream.start_tls(False, ssl_options=opts, server_hostname=self.host)
+        self.stream = None
 
-        # now that the IOStream has been swapped we can kickstart
-        # the SSL handshake
-        self.stream._do_ssl_handshake()
+        def finish_upgrade_tls(fut):
+            try:
+                self.stream = fut.result()
+                self.socket = self.stream.socket
+                self._start_read()
+            except Exception as e:
+                # skip self.close() because no stream
+                self.trigger(
+                    event.ERROR,
+                    conn=self,
+                    error=protocol.SendError('failed to upgrade to TLS', e),
+                )
+
+        tornado.ioloop.IOLoop.current().add_future(fut, finish_upgrade_tls)
 
     def upgrade_to_snappy(self):
         assert SnappySocket, 'snappy requires the python-snappy package'
@@ -449,7 +439,7 @@ class AsyncConn(event.EventedMixin):
                 self.upgrade_to_snappy()
             elif feature == 'deflate':
                 self.upgrade_to_deflate()
-            # the server will 'OK' after these conneciton upgrades triggering another response
+            # the server will 'OK' after these connection upgrades triggering another response
             return
 
         self.off(event.RESPONSE, self._on_response_continue)

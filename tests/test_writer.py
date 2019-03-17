@@ -47,8 +47,7 @@ class WriterIntegrationTest(IntegrationBase):
     def test_writer_mpub_one(self):
         topic = 'test_writer_mpub_%s' % time.time()
 
-        w = nsq.Writer(nsqd_tcp_addresses=['127.0.0.1:4150'], io_loop=self.io_loop,
-                       **self.identify_options)
+        w = nsq.Writer(nsqd_tcp_addresses=['127.0.0.1:4150'], **self.identify_options)
 
         def trypub():
             w.mpub(topic, b'{"one": 1}', callback=pubcb)
