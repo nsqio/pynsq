@@ -24,6 +24,17 @@ class DeflateSocket(object):
     def read(self, size):
         return self._recv(size, self._socket.read)
 
+    def recv_into(self, buf, nbytes=0):
+        # no real support of efficient recv_into()
+        n = nbytes or len(buf)
+        data = self.recv(n)
+        r = len(data)
+        if r > n:
+            self._bootstrapped = data[n:]
+            r = n
+        buf[:r] = data[:r]
+        return r
+
     def _recv(self, size, method):
         if self._bootstrapped:
             data = self._bootstrapped

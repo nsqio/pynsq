@@ -5,7 +5,6 @@ from __future__ import unicode_literals
 import os
 import sys
 import signal
-import socket
 import subprocess
 import time
 import ssl
@@ -23,8 +22,8 @@ if base_dir not in sys.path:
 from nsq import protocol
 from nsq.conn import AsyncConn
 from nsq.reader import Reader
-#from nsq.deflate_socket import DeflateSocket
-#from nsq.snappy_socket import SnappySocket  # TODO fix compression
+from nsq.deflate_socket import DeflateSocket
+from nsq.snappy_socket import SnappySocket
 
 
 class IntegrationBase(tornado.testing.AsyncTestCase):
@@ -80,7 +79,7 @@ class IntegrationBase(tornado.testing.AsyncTestCase):
 class ReaderIntegrationTest(IntegrationBase):
     identify_options = {
         'user_agent': 'sup',
-        # 'snappy': True, # TODO fix compression
+        'snappy': True,
         'tls_v1': True,
         'tls_options': {'cert_reqs': ssl.CERT_NONE},
         'heartbeat_interval': 10,
@@ -88,7 +87,7 @@ class ReaderIntegrationTest(IntegrationBase):
         'output_buffer_timeout': 50
     }
 
-    nsqd_command = ['nsqd', '--verbose',  # '--snappy',
+    nsqd_command = ['nsqd', '--verbose', '--snappy',
                     '--tls-key=%s/tests/key.pem' % base_dir,
                     '--tls-cert=%s/tests/cert.pem' % base_dir]
 
@@ -125,7 +124,7 @@ class ReaderIntegrationTest(IntegrationBase):
         print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
-        #assert response['data']['snappy'] is True
+        assert response['data']['snappy'] is True
         assert response['data']['tls_v1'] is True
 
     def test_conn_socket_upgrade(self):
@@ -133,9 +132,8 @@ class ReaderIntegrationTest(IntegrationBase):
         c.on('ready', self.stop)
         c.connect()
         self.wait()
-        #assert isinstance(c.socket, SnappySocket)
-        #assert isinstance(c.socket._socket, ssl.SSLSocket)
-        assert isinstance(c.socket, ssl.SSLSocket)
+        assert isinstance(c.socket, SnappySocket)
+        assert isinstance(c.socket._socket, ssl.SSLSocket)
 
     def test_conn_subscribe(self):
         topic = 'test_conn_suscribe_%s' % time.time()
@@ -218,12 +216,10 @@ class ReaderIntegrationTest(IntegrationBase):
 
 
 class DeflateReaderIntegrationTest(IntegrationBase):
-
     identify_options = {
         'user_agent': 'sup',
-        # 'deflate': True,
+        'deflate': True,
         'deflate_level': 6,
-        # 'tls_v1': True,
         'tls_options': {'cert_reqs': ssl.CERT_NONE},
         'heartbeat_interval': 10,
         'output_buffer_size': 4096,
@@ -242,17 +238,14 @@ class DeflateReaderIntegrationTest(IntegrationBase):
         print(response)
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
-        #assert response['data']['deflate'] is True
-        #assert response['data']['tls_v1'] is True
+        assert response['data']['deflate'] is True
 
     def test_conn_socket_upgrade(self):
         c = AsyncConn('127.0.0.1', 4150, **self.identify_options)
         c.on('ready', self.stop)
         c.connect()
         self.wait()
-        #assert isinstance(c.socket, DeflateSocket)
-        #assert isinstance(c.socket._socket, ssl.SSLSocket)
-        assert isinstance(c.socket, socket.socket)
+        assert isinstance(c.socket, DeflateSocket)
 
     def test_reader_messages(self):
         self.msg_count = 0

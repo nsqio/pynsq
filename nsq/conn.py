@@ -331,7 +331,7 @@ class AsyncConn(event.EventedMixin):
         # is currently in place (normal or SSL)...
         #
         # first read any compressed bytes the existing IOStream might have
-        # already buffered and use that to bootstrap the DefalteSocket, then
+        # already buffered and use that to bootstrap the DeflateSocket, then
         # monkey patch the existing IOStream by replacing its socket
         # with a wrapper that will automagically handle compression.
         existing_data = self.stream._consume(self.stream._read_buffer_size)
