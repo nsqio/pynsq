@@ -16,7 +16,7 @@ class PyTest(TestCommand):
 
 
 # also update in nsq/version.py
-version = '0.8.3'
+version = '0.9.0b1'
 
 
 setup(
@@ -32,10 +32,10 @@ setup(
         version
     ),
     packages=['nsq'],
-    install_requires=['tornado<5.0'],
+    install_requires=['tornado<6'],
     include_package_data=True,
     zip_safe=False,
-    tests_require=['pytest>=3.3.1', 'mock', 'python-snappy', 'certifi'],
+    tests_require=['pytest>=3.3.1', 'mock', 'python-snappy'],
     cmdclass={'test': PyTest},
     classifiers=[
         'Development Status :: 6 - Mature',

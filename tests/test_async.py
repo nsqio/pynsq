@@ -1,10 +1,8 @@
 from __future__ import absolute_import
-
-from __future__ import with_statement
 import os
 import sys
 
-from mock import patch, create_autospec, MagicMock
+from mock import patch, create_autospec
 from tornado.iostream import IOStream
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
@@ -22,8 +20,8 @@ def f(*args, **kwargs):
     pass
 
 
-def _get_test_conn(io_loop=None):
-    conn = AsyncConn('test', 4150, io_loop=io_loop)
+def _get_test_conn():
+    conn = AsyncConn('test', 4150)
     # now set the stream attribute, which is ordinarily set in conn.connect()
     conn.stream = create_autospec(IOStream)
     return conn
@@ -94,9 +92,7 @@ def test_read_size():
 
 
 def test_read_body():
-    mock_io_loop = MagicMock()
-
-    conn = _get_test_conn(io_loop=mock_io_loop)
+    conn = _get_test_conn()
     on_data = create_autospec(f)
     conn.on('data', on_data)
 

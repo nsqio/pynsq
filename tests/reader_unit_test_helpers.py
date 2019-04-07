@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-from __future__ import with_statement
 
 from mock import patch, create_autospec
 from tornado.ioloop import IOLoop
@@ -10,12 +9,13 @@ from nsq import event
 _conn_port = 4150
 
 
-def get_reader(io_loop=None, max_in_flight=5):
+def get_reader(max_in_flight=5):
     return nsq.Reader("test", "test",
                       message_handler=_message_handler,
-                      lookupd_http_addresses=["http://test.local:4161"],
+                      lookupd_http_addresses=["http://localhost:4161"],
                       max_in_flight=max_in_flight,
-                      io_loop=io_loop)
+                      max_backoff_duration=2.0,
+                      )
 
 
 def get_ioloop():

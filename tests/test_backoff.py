@@ -7,7 +7,9 @@ import sys
 import random
 import time
 
-from mock import call
+from mock import call, patch
+from tornado import gen
+from tornado.testing import AsyncTestCase, gen_test
 
 from .reader_unit_test_helpers import (
     get_reader,
@@ -24,168 +26,165 @@ if base_dir not in sys.path:
 from nsq import event
 
 
-def test_backoff_easy():
+class BackoffTests(AsyncTestCase):
+
+    @gen_test
+    def test_backoff_easy(self):
+        r = get_reader()
+        conn = get_conn(r)
+
+        msg = send_message(conn)
+
+        msg.trigger(event.FINISH, message=msg)
+        assert r.backoff_block is False
+        assert r.backoff_timer.get_interval() == 0
+
+        msg = send_message(conn)
+
+        msg.trigger(event.REQUEUE, message=msg)
+        assert r.backoff_block is True
+        assert r.backoff_timer.get_interval() > 0
+
+        yield gen.sleep(r.backoff_timer.get_interval() + 0.05)
+
+        assert r.backoff_block is False
+        send_args, send_kwargs = conn.stream.write.call_args
+        assert send_args[0] == b'RDY 1\n'
+
+        msg = send_message(conn)
+
+        msg.trigger(event.FINISH, message=msg)
+        assert r.backoff_block is False
+        assert r.backoff_timer.get_interval() == 0
+
+        expected_args = [
+            b'SUB test test\n',
+            b'RDY 1\n',
+            b'RDY 5\n',
+            b'FIN 1234\n',
+            b'RDY 0\n',
+            b'REQ 1234 0\n',
+            b'RDY 1\n',
+            b'RDY 5\n',
+            b'FIN 1234\n'
+        ]
+        assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
+
+    @gen_test
+    def test_backoff_out_of_order(self):
+        r = get_reader(max_in_flight=4)
+        conn1 = get_conn(r)
+        conn2 = get_conn(r)
+
+        msg = send_message(conn1)
+
+        msg.trigger(event.FINISH, message=msg)
+        assert r.backoff_block is False
+        assert r.backoff_timer.get_interval() == 0
+
+        msg = send_message(conn1)
+
+        msg.trigger(event.REQUEUE, message=msg)
+        assert r.backoff_block is True
+        assert r.backoff_timer.get_interval() > 0
+        backoff_interval = r.backoff_timer.get_interval()
+
+        msg = send_message(conn1)
+
+        msg.trigger(event.FINISH, message=msg)
+        assert r.backoff_block is True
+        assert r.backoff_timer.get_interval() == 0
+
+        yield gen.sleep(backoff_interval + 0.05)
+
+        assert r.backoff_block is False
+        assert r.backoff_timer.get_interval() == 0
+
+        expected_args = [
+            b'SUB test test\n',
+            b'RDY 1\n',
+            b'RDY 2\n',
+            b'FIN 1234\n',
+            b'RDY 0\n',
+            b'REQ 1234 0\n',
+            b'FIN 1234\n',
+            b'RDY 2\n',
+        ]
+        assert conn1.stream.write.call_args_list == [call(arg) for arg in expected_args]
+
+        expected_args = [
+            b'SUB test test\n',
+            b'RDY 1\n',
+            b'RDY 0\n',
+            b'RDY 2\n'
+        ]
+        assert conn2.stream.write.call_args_list == [call(arg) for arg in expected_args]
+
+    @gen_test
+    def test_backoff_requeue_recovery(self):
+        r = get_reader(max_in_flight=2)
+        conn = get_conn(r)
+        msg = send_message(conn)
+
+        msg.trigger(event.FINISH, message=msg)
+        assert r.backoff_block is False
+        assert r.backoff_timer.get_interval() == 0
+
+        msg = send_message(conn)
+
+        # go into backoff
+        msg.trigger(event.REQUEUE, message=msg)
+        assert r.backoff_block is True
+        assert r.backoff_timer.get_interval() > 0
+
+        yield gen.sleep(r.backoff_timer.get_interval() + 0.05)
+
+        assert r.backoff_block is False
+        assert r.backoff_timer.get_interval() != 0
+
+        msg = send_message(conn)
+
+        # This should not move out of backoff (since backoff=False)
+        msg.trigger(event.REQUEUE, message=msg, backoff=False)
+        assert r.backoff_block is True
+        assert r.backoff_timer.get_interval() != 0
+
+        # elapse time
+        yield gen.sleep(r.backoff_timer.get_interval() + 0.05)
+
+        assert r.backoff_block is False
+        assert r.backoff_timer.get_interval() != 0
+
+        # this should move out of backoff state
+        msg = send_message(conn)
+        msg.trigger(event.FINISH, message=msg)
+        assert r.backoff_block is False
+        assert r.backoff_timer.get_interval() == 0
+
+        print(conn.stream.write.call_args_list)
+
+        expected_args = [
+            b'SUB test test\n',
+            b'RDY 1\n',
+            b'RDY 2\n',
+            b'FIN 1234\n',
+            b'RDY 0\n',
+            b'REQ 1234 0\n',
+            b'RDY 1\n',
+            b'RDY 0\n',
+            b'REQ 1234 0\n',
+            b'RDY 1\n',
+            b'RDY 2\n',
+            b'FIN 1234\n'
+        ]
+        assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
+
+
+@patch("tornado.ioloop.IOLoop.current")
+def test_backoff_hard(mock_ioloop_current):
     mock_ioloop = get_ioloop()
-    r = get_reader(mock_ioloop)
-    conn = get_conn(r)
-
-    msg = send_message(conn)
-
-    msg.trigger(event.FINISH, message=msg)
-    assert r.backoff_block is False
-    assert r.backoff_timer.get_interval() == 0
-
-    msg = send_message(conn)
-
-    msg.trigger(event.REQUEUE, message=msg)
-    assert r.backoff_block is True
-    assert r.backoff_timer.get_interval() > 0
-    assert mock_ioloop.add_timeout.called
-
-    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
-    timeout_args[1]()
-    assert r.backoff_block is False
-    send_args, send_kwargs = conn.stream.write.call_args
-    assert send_args[0] == b'RDY 1\n'
-
-    msg = send_message(conn)
-
-    msg.trigger(event.FINISH, message=msg)
-    assert r.backoff_block is False
-    assert r.backoff_timer.get_interval() == 0
-
-    expected_args = [
-        b'SUB test test\n',
-        b'RDY 1\n',
-        b'RDY 5\n',
-        b'FIN 1234\n',
-        b'RDY 0\n',
-        b'REQ 1234 0\n',
-        b'RDY 1\n',
-        b'RDY 5\n',
-        b'FIN 1234\n'
-    ]
-    assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
-
-
-def test_backoff_out_of_order():
-    mock_ioloop = get_ioloop()
-    r = get_reader(mock_ioloop, max_in_flight=4)
-    conn1 = get_conn(r)
-    conn2 = get_conn(r)
-
-    msg = send_message(conn1)
-
-    msg.trigger(event.FINISH, message=msg)
-    assert r.backoff_block is False
-    assert r.backoff_timer.get_interval() == 0
-
-    msg = send_message(conn1)
-
-    msg.trigger(event.REQUEUE, message=msg)
-    assert r.backoff_block is True
-    assert r.backoff_timer.get_interval() > 0
-    assert mock_ioloop.add_timeout.called
-    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
-
-    msg = send_message(conn1)
-
-    msg.trigger(event.FINISH, message=msg)
-    assert r.backoff_block is True
-    assert r.backoff_timer.get_interval() == 0
-
-    timeout_args[1]()
-    assert r.backoff_block is False
-    assert r.backoff_timer.get_interval() == 0
-
-    expected_args = [
-        b'SUB test test\n',
-        b'RDY 1\n',
-        b'RDY 2\n',
-        b'FIN 1234\n',
-        b'RDY 0\n',
-        b'REQ 1234 0\n',
-        b'FIN 1234\n',
-        b'RDY 2\n',
-    ]
-    assert conn1.stream.write.call_args_list == [call(arg) for arg in expected_args]
-
-    expected_args = [
-        b'SUB test test\n',
-        b'RDY 1\n',
-        b'RDY 0\n',
-        b'RDY 2\n'
-    ]
-    assert conn2.stream.write.call_args_list == [call(arg) for arg in expected_args]
-
-
-def test_backoff_requeue_recovery():
-    mock_ioloop = get_ioloop()
-    r = get_reader(mock_ioloop, max_in_flight=2)
-    conn = get_conn(r)
-    msg = send_message(conn)
-
-    msg.trigger(event.FINISH, message=msg)
-    assert r.backoff_block is False
-    assert r.backoff_timer.get_interval() == 0
-    assert mock_ioloop.add_timeout.call_count == 1
-
-    msg = send_message(conn)
-
-    # go into backoff
-    msg.trigger(event.REQUEUE, message=msg)
-    assert r.backoff_block is True
-    assert r.backoff_timer.get_interval() > 0
-    assert mock_ioloop.add_timeout.call_count == 2
-    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
-
-    # elapse time
-    timeout_args[1]()
-    assert r.backoff_block is False
-    assert r.backoff_timer.get_interval() != 0
-
-    msg = send_message(conn)
-
-    # This should not move out of backoff (since backoff=False)
-    msg.trigger(event.REQUEUE, message=msg, backoff=False)
-    assert r.backoff_block is True
-    assert r.backoff_timer.get_interval() != 0
-    assert mock_ioloop.add_timeout.call_count == 3
-    timeout_args, timeout_kwargs = mock_ioloop.add_timeout.call_args
-
-    # elapse time
-    timeout_args[1]()
-    assert r.backoff_block is False
-    assert r.backoff_timer.get_interval() != 0
-
-    # this should move out of backoff state
-    msg = send_message(conn)
-    msg.trigger(event.FINISH, message=msg)
-    assert r.backoff_block is False
-    assert r.backoff_timer.get_interval() == 0
-
-    print(conn.stream.write.call_args_list)
-
-    expected_args = [
-        b'SUB test test\n',
-        b'RDY 1\n',
-        b'RDY 2\n',
-        b'FIN 1234\n',
-        b'RDY 0\n',
-        b'REQ 1234 0\n',
-        b'RDY 1\n',
-        b'RDY 0\n',
-        b'REQ 1234 0\n',
-        b'RDY 1\n',
-        b'RDY 2\n',
-        b'FIN 1234\n'
-    ]
-    assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
-
-
-def test_backoff_hard():
-    mock_ioloop = get_ioloop()
-    r = get_reader(io_loop=mock_ioloop)
+    mock_ioloop_current.return_value = mock_ioloop
+    r = get_reader()
     conn = get_conn(r)
 
     expected_args = [b'SUB test test\n', b'RDY 1\n', b'RDY 5\n']
@@ -250,9 +249,11 @@ def test_backoff_hard():
     assert conn.stream.write.call_args_list == [call(arg) for arg in expected_args]
 
 
-def test_backoff_many_conns():
+@patch("tornado.ioloop.IOLoop.current")
+def test_backoff_many_conns(mock_ioloop_current):
     mock_ioloop = get_ioloop()
-    r = get_reader(io_loop=mock_ioloop)
+    mock_ioloop_current.return_value = mock_ioloop
+    r = get_reader()
 
     num_conns = 5
     conns = []
@@ -349,9 +350,11 @@ def test_backoff_many_conns():
         assert c.stream.write.call_args_list == [call(arg) for arg in c.expected_args]
 
 
-def test_backoff_conns_disconnect():
+@patch("tornado.ioloop.IOLoop.current")
+def test_backoff_conns_disconnect(mock_ioloop_current):
     mock_ioloop = get_ioloop()
-    r = get_reader(io_loop=mock_ioloop)
+    mock_ioloop_current.return_value = mock_ioloop
+    r = get_reader()
 
     num_conns = 5
     conns = []

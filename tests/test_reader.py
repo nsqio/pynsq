@@ -21,8 +21,8 @@ if base_dir not in sys.path:
 
 from nsq import protocol
 from nsq.conn import AsyncConn
-from nsq.deflate_socket import DeflateSocket
 from nsq.reader import Reader
+from nsq.deflate_socket import DeflateSocket
 from nsq.snappy_socket import SnappySocket
 
 
@@ -66,7 +66,7 @@ class IntegrationBase(tornado.testing.AsyncTestCase):
                 continue
 
     def _send_messages(self, topic, count, body):
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
+        c = AsyncConn('127.0.0.1', 4150)
         c.connect()
 
         def _on_ready(*args, **kwargs):
@@ -102,13 +102,13 @@ class ReaderIntegrationTest(IntegrationBase):
         self.assertRaises(
             AssertionError,
             Reader,
-            nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic,
-            channel='ch', io_loop=self.io_loop,
+            nsqd_tcp_addresses=['127.0.0.1:4150'],
+            topic=topic, channel='ch',
             message_handler=handler, max_in_flight=100,
             **bad_options)
 
     def test_conn_identify(self):
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop)
+        c = AsyncConn('127.0.0.1', 4150)
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
@@ -117,8 +117,7 @@ class ReaderIntegrationTest(IntegrationBase):
         assert isinstance(response['data'], dict)
 
     def test_conn_identify_options(self):
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                      **self.identify_options)
+        c = AsyncConn('127.0.0.1', 4150, **self.identify_options)
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
@@ -129,8 +128,7 @@ class ReaderIntegrationTest(IntegrationBase):
         assert response['data']['tls_v1'] is True
 
     def test_conn_socket_upgrade(self):
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                      **self.identify_options)
+        c = AsyncConn('127.0.0.1', 4150, **self.identify_options)
         c.on('ready', self.stop)
         c.connect()
         self.wait()
@@ -139,8 +137,7 @@ class ReaderIntegrationTest(IntegrationBase):
 
     def test_conn_subscribe(self):
         topic = 'test_conn_suscribe_%s' % time.time()
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                      **self.identify_options)
+        c = AsyncConn('127.0.0.1', 4150, **self.identify_options)
 
         def _on_ready(*args, **kwargs):
             c.on('response', self.stop)
@@ -159,8 +156,7 @@ class ReaderIntegrationTest(IntegrationBase):
         topic = 'test_conn_suscribe_%s' % time.time()
         self._send_messages(topic, 5, b'sup')
 
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                      **self.identify_options)
+        c = AsyncConn('127.0.0.1', 4150, **self.identify_options)
 
         def _on_message(*args, **kwargs):
             self.msg_count += 1
@@ -193,7 +189,7 @@ class ReaderIntegrationTest(IntegrationBase):
             return True
 
         r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
-                   io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+                   message_handler=handler, max_in_flight=100,
                    **self.identify_options)
 
         self.wait()
@@ -214,18 +210,16 @@ class ReaderIntegrationTest(IntegrationBase):
 
         topic = 'test_reader_hb_%s' % time.time()
         HeartbeatReader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
-                        io_loop=self.io_loop, message_handler=handler, max_in_flight=100,
+                        message_handler=handler, max_in_flight=100,
                         heartbeat_interval=1)
         self.wait()
 
 
 class DeflateReaderIntegrationTest(IntegrationBase):
-
     identify_options = {
         'user_agent': 'sup',
         'deflate': True,
         'deflate_level': 6,
-        'tls_v1': True,
         'tls_options': {'cert_reqs': ssl.CERT_NONE},
         'heartbeat_interval': 10,
         'output_buffer_size': 4096,
@@ -237,8 +231,7 @@ class DeflateReaderIntegrationTest(IntegrationBase):
                     '--tls-cert=%s/tests/cert.pem' % base_dir]
 
     def test_conn_identify_options(self):
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                      **self.identify_options)
+        c = AsyncConn('127.0.0.1', 4150, **self.identify_options)
         c.on('identify_response', self.stop)
         c.connect()
         response = self.wait()
@@ -246,16 +239,33 @@ class DeflateReaderIntegrationTest(IntegrationBase):
         assert response['conn'] is c
         assert isinstance(response['data'], dict)
         assert response['data']['deflate'] is True
-        assert response['data']['tls_v1'] is True
 
     def test_conn_socket_upgrade(self):
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                      **self.identify_options)
+        c = AsyncConn('127.0.0.1', 4150, **self.identify_options)
         c.on('ready', self.stop)
         c.connect()
         self.wait()
         assert isinstance(c.socket, DeflateSocket)
-        assert isinstance(c.socket._socket, ssl.SSLSocket)
+
+    def test_reader_messages(self):
+        self.msg_count = 0
+        num_messages = 300
+        topic = 'test_reader_msgs_%s' % time.time()
+        self._send_messages(topic, num_messages, b'sup')
+
+        def handler(msg):
+            assert msg.body == b'sup'
+            self.msg_count += 1
+            if self.msg_count >= num_messages:
+                self.stop()
+            return True
+
+        r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'],
+                   topic=topic, channel='ch',
+                   message_handler=handler, max_in_flight=100,
+                   **self.identify_options)
+        self.wait()
+        r.close()
 
 
 class LookupdReaderIntegrationTest(IntegrationBase):
@@ -286,7 +296,6 @@ class LookupdReaderIntegrationTest(IntegrationBase):
         r = Reader(lookupd_http_addresses=['http://127.0.0.1:4161'],
                    topic=topic,
                    channel='ch',
-                   io_loop=self.io_loop,
                    message_handler=handler,
                    lookupd_poll_interval=1,
                    lookupd_poll_jitter=0.01,
@@ -336,11 +345,10 @@ class ReaderAuthIntegrationTest(IntegrationBase):
 
     def test_conn_identify(self):
         auth_app = tornado.web.Application([("/auth", AuthHandler)])
-        auth_srv = tornado.httpserver.HTTPServer(auth_app, io_loop=self.io_loop)
+        auth_srv = tornado.httpserver.HTTPServer(auth_app)
         auth_srv.add_socket(self.auth_sock)
 
-        c = AsyncConn('127.0.0.1', 4150, io_loop=self.io_loop,
-                      **self.identify_options)
+        c = AsyncConn('127.0.0.1', 4150, **self.identify_options)
 
         def _on_ready(*args, **kwargs):
             c.on('response', self.stop)
