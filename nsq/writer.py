@@ -96,7 +96,7 @@ class Writer(Client):
 
         self.name = name or nsqd_tcp_addresses[0]
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
-        self.conns = {}
+        self.conns = {} # How do we understand its relationship to line 134?
 
         # Verify keyword arguments
         valid_args = func_args(AsyncConn.__init__)
