@@ -218,7 +218,12 @@ class AsyncConn(event.EventedMixin):
         if not self.closed():
             return
 
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Assume host is an ipv6 address if it has a colon.
+        if ':' in self.host:
+            self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        else:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
         self.socket.settimeout(self.timeout)
         self.socket.setblocking(0)
 
