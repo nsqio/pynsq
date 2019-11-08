@@ -26,7 +26,7 @@ class Message(event.EventedMixin):
     :type id: string
 
     :param body: the raw message body
-    :type body: string
+    :type body: bytes
 
     :param timestamp: the timestamp the message was produced
     :type timestamp: int
@@ -38,7 +38,7 @@ class Message(event.EventedMixin):
     :type id: string
 
     :ivar body: the raw message body (from the parameter).
-    :type body: string
+    :type body: bytes
 
     :ivar timestamp: the timestamp the message was produced
                      (from the parameter).
