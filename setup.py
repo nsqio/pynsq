@@ -35,7 +35,7 @@ setup(
     install_requires=['tornado'],
     include_package_data=True,
     zip_safe=False,
-    tests_require=['pytest>=3.3.1', 'mock', 'python-snappy'],
+    tests_require=['pytest>=3.6.3', 'mock', 'python-snappy'],
     cmdclass={'test': PyTest},
     classifiers=[
         'Development Status :: 6 - Mature',
