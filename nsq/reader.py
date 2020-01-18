@@ -10,6 +10,7 @@ import json
 
 from tornado.ioloop import PeriodicCallback
 import tornado.httpclient
+import tornado.gen
 
 from ._compat import integer_types
 from ._compat import iteritems
@@ -115,7 +116,7 @@ class Reader(Client):
         this value will be divided evenly amongst the configured/discovered nsqd producers
 
     :param lookupd_poll_interval: the amount of time in seconds between querying all of the supplied
-        nsqlookupd instances.  a random amount of time based on thie value will be initially
+        nsqlookupd instances.  a random amount of time based on this value will be initially
         introduced in order to add jitter when multiple readers are running
 
     :param lookupd_poll_jitter: The maximum fractional amount of jitter to add to the
@@ -211,7 +212,6 @@ class Reader(Client):
         self.conn_kwargs = kwargs
 
         self.backoff_timer = BackoffTimer(0, max_backoff_duration)
-        self.backoff_timeout = None
         self.backoff_block = False
         self.backoff_block_completed = True
 
@@ -242,8 +242,9 @@ class Reader(Client):
 
         if not self.lookupd_http_addresses:
             return
+
         # trigger the first lookup query manually
-        self.query_lookupd()
+        self.io_loop.spawn_callback(self.query_lookupd)
 
         self.query_periodic = PeriodicCallback(
             self.query_lookupd,
@@ -253,7 +254,7 @@ class Reader(Client):
         # randomize the time we start this poll loop so that all
         # consumers don't query at exactly the same time
         delay = random.random() * self.lookupd_poll_interval * self.lookupd_poll_jitter
-        self.io_loop.add_timeout(time.time() + delay, self.query_periodic.start)
+        self.io_loop.call_later(delay, self.query_periodic.start)
 
     def close(self):
         """
@@ -313,7 +314,7 @@ class Reader(Client):
     def _handle_message(self, conn, message):
         self._maybe_update_rdy(conn)
 
-        success = False
+        result = False
         try:
             if 0 < self.max_tries < message.attempts:
                 self.giving_up(message)
@@ -321,18 +322,34 @@ class Reader(Client):
             pre_processed_message = self.preprocess_message(message)
             if not self.validate_message(pre_processed_message):
                 return message.finish()
-            success = self.process_message(message)
+            result = self.process_message(message)
         except Exception:
             logger.exception('[%s:%s] uncaught exception while handling message %s body:%r',
                              conn.id, self.name, message.id, message.body)
             if not message.has_responded():
                 return message.requeue()
 
-        if not message.is_async() and not message.has_responded():
-            assert success is not None, 'ambiguous return value for synchronous mode'
-            if success:
+        if result not in (True, False, None):
+            # assume handler returned a Future or Coroutine
+            message.enable_async()
+            fut = tornado.gen.convert_yielded(result)
+            fut.add_done_callback(functools.partial(self._maybe_finish, message))
+
+        elif not message.is_async() and not message.has_responded():
+            assert result is not None, 'ambiguous return value for synchronous mode'
+            if result:
                 return message.finish()
             return message.requeue()
+
+    def _maybe_finish(self, message, fut):
+        if not message.has_responded():
+            try:
+                if fut.result():
+                    message.finish()
+                    return
+            except Exception:
+                pass
+            message.requeue()
 
     def _maybe_update_rdy(self, conn):
         if self.backoff_timer.get_interval() or self.max_in_flight == 0:
@@ -349,7 +366,6 @@ class Reader(Client):
             self._send_rdy(conn, conn_max_in_flight)
 
     def _finish_backoff_block(self):
-        self.backoff_timeout = None
         self.backoff_block = False
 
         # we must have raced and received a message out of order that resumed
@@ -418,8 +434,7 @@ class Reader(Client):
         for c in self.conns.values():
             self._send_rdy(c, 0)
 
-        self.backoff_timeout = self.io_loop.add_timeout(time.time() + backoff_interval,
-                                                        self._finish_backoff_block)
+        self.io_loop.call_later(backoff_interval, self._finish_backoff_block)
 
     def _rdy_retry(self, conn, value):
         conn.rdy_timeout = None
@@ -433,7 +448,7 @@ class Reader(Client):
         if value and (self.disabled() or self.max_in_flight == 0):
             logger.info('[%s:%s] disabled, delaying RDY state change', conn.id, self.name)
             rdy_retry_callback = functools.partial(self._rdy_retry, conn, value)
-            conn.rdy_timeout = self.io_loop.add_timeout(time.time() + 15, rdy_retry_callback)
+            conn.rdy_timeout = self.io_loop.call_later(15, rdy_retry_callback)
             return
 
         if value > conn.max_rdy_count:
@@ -543,8 +558,9 @@ class Reader(Client):
             logger.info('[%s:%s] attempting to reconnect in 15s', conn.id, self.name)
             reconnect_callback = functools.partial(self.connect_to_nsqd,
                                                    host=conn.host, port=conn.port)
-            self.io_loop.add_timeout(time.time() + 15, reconnect_callback)
+            self.io_loop.call_later(15, reconnect_callback)
 
+    @tornado.gen.coroutine
     def query_lookupd(self):
         """
         Trigger a query of the configured ``nsq_lookupd_http_addresses``.
@@ -571,15 +587,13 @@ class Reader(Client):
             headers={'Accept': 'application/vnd.nsq; version=1.0'},
             connect_timeout=self.lookupd_connect_timeout,
             request_timeout=self.lookupd_request_timeout)
-        callback = functools.partial(self._finish_query_lookupd, lookupd_url=lookupd_url)
-        self.http_client.fetch(req, callback=callback)
 
-    def _finish_query_lookupd(self, response, lookupd_url):
-        if response.error:
+        try:
+            response = yield self.http_client.fetch(req)
+        except Exception as e:
             logger.warning('[%s] lookupd %s query error: %s',
-                           self.name, lookupd_url, response.error)
+                           self.name, lookupd_url, e)
             return
-
         try:
             lookup_data = json.loads(response.body.decode("utf8"))
         except ValueError:

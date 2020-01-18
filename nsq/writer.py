@@ -2,9 +2,10 @@
 from __future__ import absolute_import
 
 import logging
-import time
 import functools
 import random
+
+import tornado.concurrent
 
 from ._compat import string_types
 from ._compat import bytes_types
@@ -14,6 +15,13 @@ from .conn import AsyncConn
 from . import protocol
 
 logger = logging.getLogger(__name__)
+
+
+def make_exc_future(exc):
+    fut = tornado.concurrent.Future()
+    fut.set_exception(exc)
+    fut.exception()  # suppress not-yielded-future-exception warning
+    return fut
 
 
 class Writer(Client):
@@ -121,7 +129,7 @@ class Writer(Client):
         :param msg: message body (bytes)
         :param callback: function which takes (conn, data) (data may be nsq.Error)
         """
-        self._pub('pub', topic, msg, callback=callback)
+        return self._pub('pub', topic, msg, callback=callback)
 
     def mpub(self, topic, msg, callback=None):
         """
@@ -135,7 +143,7 @@ class Writer(Client):
             msg = [msg]
         assert isinstance(msg, (list, set, tuple))
 
-        self._pub('mpub', topic, msg, callback=callback)
+        return self._pub('mpub', topic, msg, callback=callback)
 
     def dpub(self, topic, delay_ms, msg, callback=None):
         """
@@ -146,20 +154,20 @@ class Writer(Client):
         :param msg: message body (bytes)
         :param callback: function which takes (conn, data) (data may be nsq.Error)
         """
-        self._pub('dpub', topic, msg, delay_ms, callback=callback)
+        return self._pub('dpub', topic, msg, delay_ms, callback=callback)
 
     def _pub(self, command, topic, msg, delay_ms=None, callback=None):
         if not callback:
-            callback = functools.partial(self._finish_pub, command=command,
-                                         topic=topic, msg=msg)
-
+            callback = functools.partial(self._finish_pub,
+                                         command=command, topic=topic, msg=msg)
         open_connections = [
             conn for conn in self.conns.values()
             if conn.connected()
         ]
         if not open_connections:
-            callback(None, protocol.SendError('no open connections'))
-            return
+            exc = protocol.SendError('no open connections')
+            callback(None, exc)
+            return make_exc_future(exc)
 
         conn = random.choice(open_connections)
         conn.callback_queue.append(callback)
@@ -171,11 +179,13 @@ class Writer(Client):
             args = (topic, msg)
 
         try:
-            conn.send(cmd(*args))
-        except Exception:
+            return conn.send(cmd(*args))
+        except Exception as e:
             logger.exception('[%s] failed to send %s' % (conn.id, command))
-            callback(None, protocol.SendError('send error'))
+            exc = protocol.SendError('send error', e)
+            callback(None, exc)
             conn.close()
+            return make_exc_future(exc)
 
     def _on_connection_error(self, conn, error, **kwargs):
         super(Writer, self)._on_connection_error(conn, error, **kwargs)
@@ -238,7 +248,7 @@ class Writer(Client):
         logger.info('[%s] attempting to reconnect in %0.2fs', conn.id, self.reconnect_interval)
         reconnect_callback = functools.partial(self.connect_to_nsqd,
                                                host=conn.host, port=conn.port)
-        self.io_loop.add_timeout(time.time() + self.reconnect_interval, reconnect_callback)
+        self.io_loop.call_later(self.reconnect_interval, reconnect_callback)
 
     def _finish_pub(self, conn, data, command, topic, msg):
         if isinstance(data, protocol.Error):

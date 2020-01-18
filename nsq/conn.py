@@ -235,9 +235,11 @@ class AsyncConn(event.EventedMixin):
         self.on(event.CONNECT, self._on_connect)
         self.on(event.DATA, self._on_data)
 
-        self.stream.connect((self.host, self.port), self._connect_callback)
+        fut = self.stream.connect((self.host, self.port))
+        tornado.ioloop.IOLoop.current().add_future(fut, self._connect_callback)
 
-    def _connect_callback(self):
+    def _connect_callback(self, fut):
+        fut.result()
         self.state = CONNECTED
         self.stream.write(protocol.MAGIC_V2)
         self._start_read()
@@ -245,7 +247,8 @@ class AsyncConn(event.EventedMixin):
 
     def _read_bytes(self, size, callback):
         try:
-            self.stream.read_bytes(size, callback)
+            fut = self.stream.read_bytes(size)
+            tornado.ioloop.IOLoop.current().add_future(fut, callback)
         except IOError:
             self.close()
             self.trigger(
@@ -266,8 +269,9 @@ class AsyncConn(event.EventedMixin):
     def close(self):
         self.stream.close()
 
-    def _read_size(self, data):
+    def _read_size(self, fut):
         try:
+            data = fut.result()
             size = struct_l.unpack(data)[0]
         except Exception:
             self.close()
@@ -279,15 +283,16 @@ class AsyncConn(event.EventedMixin):
             return
         self._read_bytes(size, self._read_body)
 
-    def _read_body(self, data):
+    def _read_body(self, fut):
         try:
+            data = fut.result()
             self.trigger(event.DATA, conn=self, data=data)
         except Exception:
             logger.exception('uncaught exception in data event')
         self._start_read()
 
     def send(self, data):
-        self.stream.write(self.encoder.encode(data))
+        return self.stream.write(self.encoder.encode(data))
 
     def upgrade_to_tls(self, options=None):
         # in order to upgrade to TLS we need to *replace* the IOStream...

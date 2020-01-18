@@ -4,6 +4,7 @@ import sys
 
 from mock import patch, create_autospec
 from tornado.iostream import IOStream
+from tornado.concurrent import Future
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -24,6 +25,10 @@ def _get_test_conn():
     conn = AsyncConn('test', 4150)
     # now set the stream attribute, which is ordinarily set in conn.connect()
     conn.stream = create_autospec(IOStream)
+    fut = Future()
+    fut.set_result(conn.stream)
+    conn.stream.connect.return_value = fut
+    conn.stream.read_bytes.return_value = Future()
     return conn
 
 
@@ -35,10 +40,15 @@ def _get_test_conn():
 @patch('nsq.conn.socket')
 @patch('nsq.conn.tornado.iostream.IOStream', autospec=True)
 def test_connect(mock_iostream, mock_socket):
+    instance = mock_iostream.return_value
+    fut = Future()
+    fut.set_result(instance)
+    instance.connect.return_value = fut
+
     conn = _get_test_conn()
     conn.connect()
     conn.stream.set_close_callback.assert_called_once_with(conn._socket_close)
-    conn.stream.connect.assert_called_once_with((conn.host, conn.port), conn._connect_callback)
+    conn.stream.connect.assert_called_once_with((conn.host, conn.port))
     assert conn.state == 'CONNECTING'
 
     # now ensure that we will bail if we were already in a connecting or connected state
@@ -62,7 +72,9 @@ def test_connect_callback():
     # simulate having called `conn.connect` by setting state to `connecting`
     conn.state = 'CONNECTING'
     with patch.object(conn, '_start_read', autospec=True) as mock_start_read:
-        conn._connect_callback()
+        fut = Future()
+        fut.set_result(conn.stream)
+        conn._connect_callback(fut)
         assert conn.state == 'CONNECTED'
         conn.stream.write.assert_called_once_with(protocol.MAGIC_V2)
         mock_start_read.assert_called_once_with()
@@ -72,21 +84,25 @@ def test_connect_callback():
 def test_start_read():
     conn = _get_test_conn()
     conn._start_read()
-    conn.stream.read_bytes.assert_called_once_with(4, conn._read_size)
+    conn.stream.read_bytes.assert_called_once_with(4)
 
 
 def test_read_size():
     conn = _get_test_conn()
     body_size = 6
     body_size_packed = struct_l.pack(body_size)
-    conn._read_size(body_size_packed)
-    conn.stream.read_bytes.assert_called_once_with(body_size, conn._read_body)
+    fut = Future()
+    fut.set_result(body_size_packed)
+    conn._read_size(fut)
+    conn.stream.read_bytes.assert_called_once_with(body_size)
 
     # now test that we get the right behavior when we get malformed data
     # for this, we'll want to stick on mock on conn.close
     conn.stream.read_bytes.reset_mock()
     with patch.object(conn, 'close', autospec=True) as mock_close:
-        conn._read_size('asdfasdf')
+        fut = Future()
+        fut.set_result('asdfasdf')
+        conn._read_size(fut)
         mock_close.assert_called_once_with()
         assert not conn.stream.read_bytes.called
 
@@ -97,14 +113,16 @@ def test_read_body():
     conn.on('data', on_data)
 
     data = 'NSQ'
-    conn._read_body(data)
+    fut = Future()
+    fut.set_result(data)
+    conn._read_body(fut)
     on_data.assert_called_once_with(conn=conn, data=data)
-    conn.stream.read_bytes.assert_called_once_with(4, conn._read_size)
+    conn.stream.read_bytes.assert_called_once_with(4)
 
     # now test functionality when the data_callback fails
     on_data.reset_mock()
     conn.stream.read_bytes.reset_mock()
     on_data.return_value = Exception("Boom.")
-    conn._read_body(data)
+    conn._read_body(fut)
     # verify that the next _start_read was called
-    conn.stream.read_bytes.assert_called_once_with(4, conn._read_size)
+    conn.stream.read_bytes.assert_called_once_with(4)
