@@ -104,6 +104,7 @@ class Writer(Client):
 
         self.name = name or nsqd_tcp_addresses[0]
         self.nsqd_tcp_addresses = nsqd_tcp_addresses
+        self._closed = False
         self.conns = {}
 
         # Verify keyword arguments
@@ -245,6 +246,9 @@ class Writer(Client):
                 logger.exception('[%s] uncaught exception in callback', conn.id)
 
         logger.warning('[%s] connection closed', conn.id)
+        if self._closed:
+            return
+
         logger.info('[%s] attempting to reconnect in %0.2fs', conn.id, self.reconnect_interval)
         reconnect_callback = functools.partial(self.connect_to_nsqd,
                                                host=conn.host, port=conn.port)
@@ -254,3 +258,14 @@ class Writer(Client):
         if isinstance(data, protocol.Error):
             logger.error('[%s] failed to %s (%s, %s), data is %s',
                          conn.id if conn else 'NA', command, topic, msg, data)
+
+    def close(self):
+        """
+        Closes all connections and stops all periodic callbacks
+        """
+        self._closed = True
+
+        for conn in self.conns.values():
+            conn.close()
+
+        super(Writer, self).close()
