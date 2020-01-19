@@ -15,8 +15,8 @@ try:
 except ImportError:
     SnappyEncoder = SnappySocket = None  # pyflakes.ignore
 
-import tornado.iostream
-import tornado.ioloop
+from tornado.iostream import IOStream
+from tornado.ioloop import IOLoop
 
 from nsq import event, protocol
 from .deflate_socket import DeflateSocket, DeflateEncoder
@@ -227,7 +227,7 @@ class AsyncConn(event.EventedMixin):
         self.socket.settimeout(self.timeout)
         self.socket.setblocking(0)
 
-        self.stream = tornado.iostream.IOStream(self.socket)
+        self.stream = IOStream(self.socket)
         self.stream.set_close_callback(self._socket_close)
         self.stream.set_nodelay(True)
 
@@ -236,7 +236,7 @@ class AsyncConn(event.EventedMixin):
         self.on(event.DATA, self._on_data)
 
         fut = self.stream.connect((self.host, self.port))
-        tornado.ioloop.IOLoop.current().add_future(fut, self._connect_callback)
+        IOLoop.current().add_future(fut, self._connect_callback)
 
     def _connect_callback(self, fut):
         fut.result()
@@ -248,7 +248,7 @@ class AsyncConn(event.EventedMixin):
     def _read_bytes(self, size, callback):
         try:
             fut = self.stream.read_bytes(size)
-            tornado.ioloop.IOLoop.current().add_future(fut, callback)
+            IOLoop.current().add_future(fut, callback)
         except IOError:
             self.close()
             self.trigger(
@@ -318,7 +318,7 @@ class AsyncConn(event.EventedMixin):
                     error=protocol.SendError('failed to upgrade to TLS', e),
                 )
 
-        tornado.ioloop.IOLoop.current().add_future(fut, finish_upgrade_tls)
+        IOLoop.current().add_future(fut, finish_upgrade_tls)
 
     def upgrade_to_snappy(self):
         assert SnappySocket, 'snappy requires the python-snappy package'

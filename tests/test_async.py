@@ -38,7 +38,7 @@ def _get_test_conn():
 #   https://github.com/testing-cabal/mock/issues/323
 #
 @patch('nsq.conn.socket')
-@patch('nsq.conn.tornado.iostream.IOStream', autospec=True)
+@patch('nsq.conn.IOStream', autospec=True)
 def test_connect(mock_iostream, mock_socket):
     instance = mock_iostream.return_value
     fut = Future()

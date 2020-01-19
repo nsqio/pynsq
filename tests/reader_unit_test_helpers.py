@@ -30,7 +30,7 @@ def get_ioloop():
 
 def get_conn(reader):
     global _conn_port
-    with patch('nsq.conn.tornado.iostream.IOStream', autospec=True) as iostream:
+    with patch('nsq.conn.IOStream', autospec=True) as iostream:
         instance = iostream.return_value
         instance.connect.return_value = Future()
         instance.read_bytes.return_value = Future()
