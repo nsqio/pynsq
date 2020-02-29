@@ -260,6 +260,7 @@ def test_backoff_many_conns(mock_ioloop_current):
     for i in range(num_conns):
         conn = get_conn(r)
         conn.expected_args = [b'SUB test test\n', b'RDY 1\n']
+        conn.last_exp_rdy = b'RDY 1\n'
         conn.fails = 0
         conns.append(conn)
 
@@ -271,7 +272,7 @@ def test_backoff_many_conns(mock_ioloop_current):
         msg = send_message(conn)
 
         if r.backoff_timer.get_interval() == 0:
-            conn.expected_args.append(b'RDY 1\n')
+            add_exp_rdy(conn, b'RDY 1\n')
 
         if fail or not conn.fails:
             msg.trigger(event.REQUEUE, message=msg)
@@ -279,7 +280,7 @@ def test_backoff_many_conns(mock_ioloop_current):
             conn.fails += 1
 
             for c in conns:
-                c.expected_args.append(b'RDY 0\n')
+                add_exp_rdy(c, b'RDY 0\n')
             conn.expected_args.append(b'REQ 1234 0\n')
         else:
             msg.trigger(event.FINISH, message=msg)
@@ -287,7 +288,7 @@ def test_backoff_many_conns(mock_ioloop_current):
             conn.fails -= 1
 
             for c in conns:
-                c.expected_args.append(b'RDY 0\n')
+                add_exp_rdy(c, b'RDY 0\n')
             conn.expected_args.append(b'FIN 1234\n')
 
         assert r.backoff_block is True
@@ -299,7 +300,7 @@ def test_backoff_many_conns(mock_ioloop_current):
             conn = timeout_args[1]()
             last_timeout_time = timeout_args[0]
         assert r.backoff_block is False
-        conn.expected_args.append(b'RDY 1\n')
+        add_exp_rdy(conn, b'RDY 1\n')
 
         fail = True
         if random.random() < 0.3 and total_fails > 1:
@@ -313,9 +314,9 @@ def test_backoff_many_conns(mock_ioloop_current):
             for c in conns:
                 if c.rdy > 0:
                     c.last_msg_timestamp = time.time() - 60
-                    c.expected_args.append(b'RDY 0\n')
+                    add_exp_rdy(c, b'RDY 0\n')
             conn = r._redistribute_rdy_state()
-            conn.expected_args.append(b'RDY 1\n')
+            add_exp_rdy(conn, b'RDY 1\n')
             continue
 
         msg = send_message(conn)
@@ -326,10 +327,10 @@ def test_backoff_many_conns(mock_ioloop_current):
 
         if total_fails > 0:
             for c in conns:
-                c.expected_args.append(b'RDY 0\n')
+                add_exp_rdy(c, b'RDY 0\n')
         else:
             for c in conns:
-                c.expected_args.append(b'RDY 1\n')
+                add_exp_rdy(c, b'RDY 1\n')
 
         conn.expected_args.append(b'FIN 1234\n')
 
@@ -339,7 +340,7 @@ def test_backoff_many_conns(mock_ioloop_current):
             last_timeout_time = timeout_args[0]
 
         if total_fails > 0:
-            conn.expected_args.append(b'RDY 1\n')
+            add_exp_rdy(conn, b'RDY 1\n')
 
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
@@ -361,6 +362,7 @@ def test_backoff_conns_disconnect(mock_ioloop_current):
     for i in range(num_conns):
         conn = get_conn(r)
         conn.expected_args = [b'SUB test test\n', b'RDY 1\n']
+        conn.last_exp_rdy = b'RDY 1\n'
         conn.fails = 0
         conns.append(conn)
 
@@ -379,18 +381,19 @@ def test_backoff_conns_disconnect(mock_ioloop_current):
                 if not conn:
                     conn = random.choice(conns)
                 else:
-                    conn.expected_args.append(b'RDY 1\n')
+                    add_exp_rdy(conn, b'RDY 1\n')
                 continue
             else:
                 c = get_conn(r)
                 c.expected_args = [b'SUB test test\n']
+                c.last_exp_rdy = b'RDY 0\n'
                 c.fails = 0
                 conns.append(c)
 
         msg = send_message(conn)
 
         if r.backoff_timer.get_interval() == 0:
-            conn.expected_args.append(b'RDY 1\n')
+            add_exp_rdy(conn, b'RDY 1\n')
 
         if fail or not conn.fails:
             msg.trigger(event.REQUEUE, message=msg)
@@ -398,7 +401,7 @@ def test_backoff_conns_disconnect(mock_ioloop_current):
             conn.fails += 1
 
             for c in conns:
-                c.expected_args.append(b'RDY 0\n')
+                add_exp_rdy(c, b'RDY 0\n')
             conn.expected_args.append(b'REQ 1234 0\n')
         else:
             msg.trigger(event.FINISH, message=msg)
@@ -406,7 +409,7 @@ def test_backoff_conns_disconnect(mock_ioloop_current):
             conn.fails -= 1
 
             for c in conns:
-                c.expected_args.append(b'RDY 0\n')
+                add_exp_rdy(c, b'RDY 0\n')
             conn.expected_args.append(b'FIN 1234\n')
 
         assert r.backoff_block is True
@@ -418,7 +421,7 @@ def test_backoff_conns_disconnect(mock_ioloop_current):
             conn = timeout_args[1]()
             last_timeout_time = timeout_args[0]
         assert r.backoff_block is False
-        conn.expected_args.append(b'RDY 1\n')
+        add_exp_rdy(conn, b'RDY 1\n')
 
         fail = True
         if random.random() < 0.3 and total_fails > 1:
@@ -435,10 +438,10 @@ def test_backoff_conns_disconnect(mock_ioloop_current):
 
         if total_fails > 0:
             for c in conns:
-                c.expected_args.append(b'RDY 0\n')
+                add_exp_rdy(c, b'RDY 0\n')
         else:
             for c in conns:
-                c.expected_args.append(b'RDY 1\n')
+                add_exp_rdy(c, b'RDY 1\n')
 
         conn.expected_args.append(b'FIN 1234\n')
 
@@ -448,7 +451,7 @@ def test_backoff_conns_disconnect(mock_ioloop_current):
             last_timeout_time = timeout_args[0]
 
         if total_fails > 0:
-            conn.expected_args.append(b'RDY 1\n')
+            add_exp_rdy(conn, b'RDY 1\n')
 
     assert r.backoff_block is False
     assert r.backoff_timer.get_interval() == 0
@@ -457,3 +460,9 @@ def test_backoff_conns_disconnect(mock_ioloop_current):
         for i, f in enumerate(c.stream.write.call_args_list):
             print("%d: %s" % (i, f))
         assert c.stream.write.call_args_list == [call(arg) for arg in c.expected_args]
+
+
+def add_exp_rdy(conn, rdy):
+    if conn.last_exp_rdy != rdy:
+        conn.expected_args.append(rdy)
+        conn.last_exp_rdy = rdy
