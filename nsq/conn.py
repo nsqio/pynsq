@@ -346,16 +346,17 @@ class AsyncConn(event.EventedMixin):
         self.encoder = DeflateEncoder(level=self.deflate_level)
 
     def send_rdy(self, value):
-        try:
-            self.send(protocol.ready(value))
-        except Exception as e:
-            self.close()
-            self.trigger(
-                event.ERROR,
-                conn=self,
-                error=protocol.SendError('failed to send RDY %d' % value, e),
-            )
-            return False
+        if self.last_rdy != value:
+            try:
+                self.send(protocol.ready(value))
+            except Exception as e:
+                self.close()
+                self.trigger(
+                    event.ERROR,
+                    conn=self,
+                    error=protocol.SendError('failed to send RDY %d' % value, e),
+                )
+                return False
         self.last_rdy = value
         self.rdy = value
         return True
