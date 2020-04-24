@@ -1,0 +1,53 @@
+name: Linux tests
+
+on:
+  push:         {branches: [master]}
+  pull_request: {branches: [master]}
+
+jobs:
+  test:
+    runs-on: ubuntu-18.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        imgtag:
+          - "python:2.7-buster"
+          - "python:3.5-buster"
+          - "python:3.8-buster"
+        tornado_ver:
+          - "4.5.3"
+          - "5.1.1"
+        nsq_dl:
+          - "nsq-1.0.0-compat.linux-amd64.go1.8"
+          - "nsq-1.1.0.linux-amd64.go1.10.3"
+          - "nsq-1.2.0.linux-amd64.go1.12.9"
+
+    container: "${{matrix.imgtag}}"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download NSQ
+        run: |
+          wget "http://bitly-downloads.s3.amazonaws.com/nsq/${{matrix.nsq_dl}}.tar.gz"
+          tar zxvf "${{matrix.nsq_dl}}.tar.gz"
+          ./${{matrix.nsq_dl}}/bin/nsqd --version
+      - name: Install Snappy
+        run: |
+          git clone https://github.com/google/snappy.git
+          cd snappy
+          git checkout 1.1.8
+          CFLAGS="-fPIC" CXXFLAGS="-fPIC" \
+              cmake -DCMAKE_INSTALL_PREFIX="/usr/local"
+          make install
+          cd ..
+      - name: Install Python Dependencies
+        run: |
+          pip install python-snappy pycurl pytest==4.4.2 flake8==3.7.9 tornado=${{matrix.tornado_ver}}
+      - name: Lint
+        run: |
+          flake8 --version
+          flake8 --show-source
+      - name: Test
+        run: |
+          export PATH=${{matrix.nsq_dl}}/bin:$PATH
+          pytest -v
