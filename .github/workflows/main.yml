@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-18.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        imgtag:
+          - "python:2.7-buster"
+          - "python:3.4-jessie"
+          - "python:3.5-buster"
+          - "python:3.6-buster"
+          - "python:3.7-buster"
+          - "python:3.8-buster"
+        tornado_ver:
+          - "4.5.3"
+          - "5.1.1"
+
+    container: "${{matrix.imgtag}}"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download NSQ
+        run: |
+          PY_VER="$(python -c 'import sys; print(sys.version_info[:2])')"
+          case "$PY_VER" in
+              '(3, 4)' | '(3, 7)' ) NSQ_DIST="nsq-1.0.0-compat.linux-amd64.go1.8" ;;
+              '(2, 7)' | '(3, 6)' ) NSQ_DIST="nsq-1.1.0.linux-amd64.go1.10.3" ;;
+              '(3, 5)' | '(3, 8)' ) NSQ_DIST="nsq-1.2.0.linux-amd64.go1.12.9" ;;
+          esac
+          echo "PY_VER=$PY_VER"
+          echo "NSQ_DIST=$NSQ_DIST"
+          curl -sSL "http://bitly-downloads.s3.amazonaws.com/nsq/${NSQ_DIST}.tar.gz" \
+                    | tar -xzv --strip-components=1
+          ./bin/nsqd --version
+      - name: Install System Dependencies
+        run: |
+          apt-get -q -y update
+          apt-get -q -y install libsnappy-dev
+      - name: Install Python Dependencies
+        run: |
+          pip install python-snappy pycurl mock pytest==4.4.2 flake8==3.7.9 \
+                      tornado==${{matrix.tornado_ver}}
+      - name: Lint
+        run: |
+          flake8 --version
+          flake8 --show-source
+      - name: Test
+        run: |
+          export PATH=bin:$PATH
+          pytest -v
