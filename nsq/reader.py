@@ -49,14 +49,20 @@ class Reader(Client):
     It maintains a sufficient RDY count based on the # of producers and your configured
     ``max_in_flight``.
 
-    Handlers should be defined as shown in the examples below. The handler receives a
-    :class:`nsq.Message` object that has instance methods :meth:`nsq.Message.finish`,
-    :meth:`nsq.Message.requeue`, and :meth:`nsq.Message.touch` to respond to ``nsqd``.
+    Handlers should be defined as shown in the examples below. The ``message_handler``
+    callback function receives a :class:`nsq.Message` object that has instance methods
+    :meth:`nsq.Message.finish`, :meth:`nsq.Message.requeue`, and :meth:`nsq.Message.touch`
+    which can be used to respond to ``nsqd``. As an alternative to explicitly calling these
+    response methods, the handler function can simply return ``True`` to finish the message,
+    or ``False`` to requeue it. If the handler function calls :meth:`nsq.Message.enable_async`,
+    then automatic finish/requeue is disabled, allowing the :class:`nsq.Message` to finish or
+    requeue in a later async callback or context. The handler function may also be a coroutine,
+    in which case Message async handling is enabled automatically, but the coroutine
+    can still return a final value of True/False to automatically finish/requeue the message.
 
-    When messages are not responded to explicitly, it is responsible for sending
-    ``FIN`` or ``REQ`` commands based on return value of  ``message_handler``. When
-    re-queueing, it will backoff from processing additional messages for an increasing
-    delay (calculated exponentially based on consecutive failures up to ``max_backoff_duration``).
+    After re-queueing a message, the handler will backoff from processing additional messages
+    for an increasing delay (calculated exponentially based on consecutive failures up to
+    ``max_backoff_duration``).
 
     Synchronous example::
 
