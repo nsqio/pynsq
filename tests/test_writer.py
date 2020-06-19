@@ -1,9 +1,10 @@
 from __future__ import absolute_import
-
 import time
+import unittest
+
+import tornado.gen
 
 import nsq
-import unittest
 
 from .test_reader import IntegrationBase
 
@@ -63,3 +64,19 @@ class WriterIntegrationTest(IntegrationBase):
         result = self.wait()
         print(str(result))
         assert not isinstance(result, Exception)
+
+    def test_writer_await_pub(self):
+        topic = 'test_writer_mpub_%s' % time.time()
+
+        w = nsq.Writer(nsqd_tcp_addresses=['127.0.0.1:4150'], **self.identify_options)
+
+        @tornado.gen.coroutine
+        def trypub():
+            yield w.pub(topic, b'{"one": 1}')
+            yield w.pub(topic, b'{"two": 2}')
+            self.stop("OK")
+
+        self.io_loop.call_later(0.1, trypub)
+        result = self.wait()
+        print(str(result))
+        assert result == "OK"

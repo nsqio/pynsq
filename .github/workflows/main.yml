@@ -25,6 +25,12 @@ jobs:
         tornado_ver:
           - "4.5.3"
           - "5.1.1"
+          - "6.0.4"
+        exclude:
+          - imgtag: "python:2.7-buster"
+            tornado_ver: "6.0.4"
+          - imgtag: "python:3.4-jessie"
+            tornado_ver: "6.0.4"
 
     container: "${{matrix.imgtag}}"
     steps:

@@ -1,8 +1,9 @@
 from __future__ import absolute_import
 
 import signal
-import tornado.ioloop
 import logging
+
+import tornado.ioloop
 
 from .protocol import (
     Error,
@@ -36,7 +37,7 @@ from .version import __version__  # noqa: F401
 def _handle_term_signal(sig_num, frame):
     logging.getLogger(__name__).info(
         'TERM Signal handler called with signal %r', sig_num)
-    tornado.ioloop.IOLoop.instance().stop()
+    tornado.ioloop.IOLoop.current().stop()
 
 
 def run():
@@ -45,7 +46,7 @@ def run():
     """
     signal.signal(signal.SIGTERM, _handle_term_signal)
     signal.signal(signal.SIGINT, _handle_term_signal)
-    tornado.ioloop.IOLoop.instance().start()
+    tornado.ioloop.IOLoop.current().start()
 
 
 __author__ = "Matt Reiferson <snakes@gmail.com>"

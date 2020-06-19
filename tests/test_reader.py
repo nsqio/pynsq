@@ -9,10 +9,11 @@ import subprocess
 import time
 import ssl
 
+import tornado.gen
 import tornado.httpclient
+import tornado.httpserver
 import tornado.testing
 import tornado.web
-import tornado.httpserver
 
 # shunt '..' into sys.path since we are in a 'tests' subdirectory
 base_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -194,6 +195,30 @@ class ReaderIntegrationTest(IntegrationBase):
 
         self.wait()
         r.close()
+        assert self.msg_count == num_messages
+
+    def test_reader_coro(self):
+        self.msg_count = 0
+        num_messages = 20
+
+        topic = 'test_reader_msgs_%s' % time.time()
+        self._send_messages(topic, num_messages, b'sup')
+
+        @tornado.gen.coroutine
+        def handler(msg):
+            yield tornado.gen.sleep(0.1)
+            self.msg_count += 1
+            if self.msg_count >= num_messages:
+                self.stop()
+            raise tornado.gen.Return(True)
+
+        r = Reader(nsqd_tcp_addresses=['127.0.0.1:4150'], topic=topic, channel='ch',
+                   message_handler=handler, max_in_flight=10,
+                   **self.identify_options)
+
+        self.wait()
+        r.close()
+        assert self.msg_count == num_messages
 
     def test_reader_heartbeat(self):
         this = self
