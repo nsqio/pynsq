@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 - 2020-07-25
+
+ * #244 - tornado 6.x support, co-routine message handlers
+ * #247 - switch to GitHub Actions for CI
+ * #243 - reduce RDY updates when value hasn't changed (thanks @andyxning)
+ * #232 - tornado 5.x support
+ * #238 - enable IPV6 support (thanks @andyxning)
+ * #230 - fix RDY handling when reducing `max_in_flight` (thanks @alpaker)
+ * #227 - better pydocs for methods
+
 ## 0.8.3 - 2018-11-11
 
  * #223 - update default TLS version to 1.2 and support overriding via tls_options (thanks @duczen)
