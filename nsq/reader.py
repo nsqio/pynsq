@@ -532,7 +532,8 @@ class Reader(Client):
         #       *initially* starved since redistribute won't apply
         #    2. `max_in_flight < num_conns` ensuring that we never exceed max_in_flight
         #       and rely on the fact that redistribute will handle balancing RDY across conns
-        if not self.backoff_timer.get_interval() or len(self.conns) == 1:
+        if (not self.backoff_timer.get_interval() or len(self.conns) == 1) and \
+           self.total_rdy < self.max_in_flight:
             # only send RDY 1 if we're not in backoff (some other conn
             # should be testing the waters)
             # (but always send it if we're the first)
