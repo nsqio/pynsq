@@ -368,7 +368,8 @@ class Reader(Client):
         #     2. After a change in connection count or max_in_flight we adjust to the new
         #        connection_max_in_flight.
         conn_max_in_flight = self._connection_max_in_flight()
-        if conn.rdy == 1 or conn.rdy != conn_max_in_flight:
+        if (conn.rdy == 1 or conn.rdy != conn_max_in_flight) and \
+           self.total_rdy < self.max_in_flight:
             self._send_rdy(conn, conn_max_in_flight)
 
     def _finish_backoff_block(self):
@@ -620,6 +621,11 @@ class Reader(Client):
 
     def set_max_in_flight(self, max_in_flight):
         """Dynamically adjust the reader max_in_flight. Set to 0 to immediately disable a Reader"""
+        for conn in self.conns.values():
+            if conn.rdy_timeout is not None:
+                self.io_loop.remove_timeout(conn.rdy_timeout)
+                conn.rdy_timeout = None
+
         assert isinstance(max_in_flight, int)
         self.max_in_flight = max_in_flight
 
@@ -664,6 +670,17 @@ class Reader(Client):
 
         if self.need_rdy_redistributed:
             self.need_rdy_redistributed = False
+
+            if self.total_rdy > self.max_in_flight:
+                conns = list(self.conns.values())
+                available_rdy = self.max_in_flight
+                while conns and available_rdy:
+                    available_rdy -= 1
+                    conn = conns.pop(random.randrange(len(conns)))
+                    self._send_rdy(conn, 1)
+                while conns:
+                    conn = conns.pop()
+                    self._send_rdy(conn, 0)
 
             # first set RDY 0 to all connections that have not received a message within
             # a configurable timeframe (low_rdy_idle_timeout).
