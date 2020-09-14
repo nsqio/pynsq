@@ -125,7 +125,8 @@ def test_rdy_disable_enable_in_backoff(ioloop_current_mock):
 @patch("random.randrange")
 @patch("tornado.ioloop.IOLoop.current")
 def test_rdy_retry(ioloop_current_mock, randrange_mock):
-    ioloop_current_mock.return_value = get_ioloop()
+    ioloop_mock = get_ioloop()
+    ioloop_current_mock.return_value = ioloop_mock
     randrange_mock.return_value = 0
     r = get_reader(max_in_flight=1)
     get_conn(r)
@@ -136,3 +137,136 @@ def test_rdy_retry(ioloop_current_mock, randrange_mock):
         timeout_args, _ = ioloop_mock.add_timeout.call_args
         timeout_args[1]()
     assert r.total_rdy <= r.max_in_flight
+
+
+@patch("random.randrange")
+@patch("time.time")
+@patch("tornado.ioloop.IOLoop.current")
+def test_rdy_redistribution_idle_conns_lose_rdy(ioloop_current_mock, time_mock, randrange_mock):
+    ioloop_mock = get_ioloop()
+    ioloop_current_mock.return_value = ioloop_mock
+    t = 1
+    time_mock.side_effect = lambda: t
+    randrange_mock.return_value = 1
+    r = get_reader(max_in_flight=2)
+    conn1 = get_conn(r)
+    conn2 = get_conn(r)
+    conn3 = get_conn(r)
+    assert conn1.rdy == conn2.rdy == 1
+    assert conn3.rdy == 0
+    msg = send_message(conn1)
+    msg.trigger(event.FINISH, message=msg)
+    t += r.low_rdy_idle_timeout - 0.1
+    r._redistribute_rdy_state()
+    assert conn1.rdy == conn2.rdy == 1
+    assert conn3.rdy == 0
+    t += 0.2
+    r._redistribute_rdy_state()
+    assert conn1.rdy == 0
+    assert conn2.rdy == conn3.rdy == 1
+
+
+@patch("time.time")
+@patch("tornado.ioloop.IOLoop.current")
+def test_rdy_redistribution_doesnt_reallocate_rdy_in_use(ioloop_current_mock, time_mock):
+    ioloop_mock = get_ioloop()
+    ioloop_current_mock.return_value = ioloop_mock
+    t = 1
+    time_mock.side_effect = lambda: t
+    r = get_reader(max_in_flight=2)
+    conn1 = get_conn(r)
+    conn2 = get_conn(r)
+    get_conn(r)
+    assert r.total_rdy == 2
+    msg1 = send_message(conn1)
+    msg2 = send_message(conn2)
+    msg1.trigger(event.FINISH, message=msg1)
+    t += r.low_rdy_idle_timeout + 0.1
+    r._redistribute_rdy_state()
+    assert r.total_rdy == 1
+    msg2.trigger(event.FINISH, message=msg2)
+    r._redistribute_rdy_state()
+    assert r.total_rdy == 2
+
+
+@patch("random.randrange")
+@patch("time.time")
+@patch("tornado.ioloop.IOLoop.current")
+def test_rdy_redistribution_isnt_pinned_to_conns(ioloop_current_mock, time_mock, randrange_mock):
+    ioloop_mock = get_ioloop()
+    ioloop_current_mock.return_value = ioloop_mock
+    t = 1
+    time_mock.side_effect = lambda: t
+    randrange_mock.return_value = 1
+    r = get_reader(max_in_flight=2)
+    conn1 = get_conn(r)
+    conn2 = get_conn(r)
+    conn3 = get_conn(r)
+    assert conn1.rdy == conn2.rdy == 1
+    assert conn3.rdy == 0
+    msg1 = send_message(conn1)
+    msg2 = send_message(conn2)
+    msg1.trigger(event.FINISH, message=msg1)
+    t += 1
+    r._redistribute_rdy_state()
+    assert conn1.rdy == 1
+    assert conn2.rdy == conn3.rdy == 0
+    t += 1
+    msg2.trigger(event.FINISH, message=msg2)
+    r._redistribute_rdy_state()
+    assert conn1.rdy == conn3.rdy == 1
+    assert conn2.rdy == 0
+
+
+@patch("random.choice")
+@patch("random.randrange")
+@patch("time.time")
+@patch("tornado.ioloop.IOLoop.current")
+def test_rdy_redistribution_idle_conns_lose_rdy_in_backoff(
+        ioloop_current_mock, time_mock, randrange_mock, choice_mock):
+    ioloop_mock = get_ioloop()
+    ioloop_current_mock.return_value = ioloop_mock
+    t = 1
+    time_mock.side_effect = lambda: t
+    randrange_mock.return_value = 2
+    r = get_reader(max_in_flight=2)
+    conn1 = get_conn(r)
+    conn2 = get_conn(r)
+    conn3 = get_conn(r)
+    choice_mock.return_value = conn1
+    assert conn1.rdy == conn2.rdy == 1
+    assert conn3.rdy == 0
+    msg = send_message(conn1)
+    msg.trigger(event.REQUEUE, message=msg)
+    timeout_args, _ = ioloop_mock.add_timeout.call_args
+    timeout_args[1]()
+    assert conn1.rdy == r.total_rdy == 1
+    t += r.low_rdy_idle_timeout + 0.1
+    r._redistribute_rdy_state()
+    assert conn3.rdy == r.total_rdy == 1
+
+
+@patch("random.choice")
+@patch("time.time")
+@patch("tornado.ioloop.IOLoop.current")
+def test_rdy_redistribution_doesnt_reallocate_rdy_in_use_in_backoff(
+        ioloop_current_mock, time_mock, choice_mock):
+    ioloop_mock = get_ioloop()
+    ioloop_current_mock.return_value = ioloop_mock
+    t = 1
+    time_mock.side_effect = lambda: t
+    r = get_reader(max_in_flight=2)
+    conn1 = get_conn(r)
+    conn2 = get_conn(r)
+    get_conn(r)
+    assert r.total_rdy == 2
+    msg = send_message(conn1)
+    send_message(conn2)
+    msg.trigger(event.REQUEUE, message=msg)
+    timeout_args, _ = ioloop_mock.add_timeout.call_args
+    choice_mock.return_value = conn1
+    timeout_args[1]()
+    assert r.total_rdy == 1
+    t += r.low_rdy_idle_timeout + 0.1
+    r._redistribute_rdy_state()
+    assert r.total_rdy == 0
