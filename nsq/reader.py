@@ -402,11 +402,15 @@ class Reader(Client):
 
     def _complete_backoff_block(self):
         self.backoff_block_completed = True
-        rdy = self._connection_max_in_flight()
         logger.info('[%s] backoff complete, resuming normal operation (%d connections)',
                     self.name, len(self.conns))
-        for c in self.conns.values():
-            self._send_rdy(c, rdy)
+        if self.max_in_flight < len(self.conns):
+            self.need_rdy_redistributed = True
+            self._redistribute_rdy_state()
+        else:
+            rdy = self._connection_max_in_flight()
+            for c in self.conns.values():
+                self._send_rdy(c, rdy)
 
     def _enter_continue_or_exit_backoff(self):
         # Take care of backoff in the appropriate cases.  When this
