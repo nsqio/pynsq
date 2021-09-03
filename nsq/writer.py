@@ -46,7 +46,7 @@ class Writer(Client):
         tornado.ioloop.PeriodicCallback(pub_message, 1000).start()
         nsq.run()
 
-    Example publshing a message from a Tornado HTTP request handler::
+    Example publishing a message from a Tornado HTTP request handler::
 
         import functools
         import tornado.httpserver

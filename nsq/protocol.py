@@ -16,7 +16,7 @@ FRAME_TYPE_RESPONSE = 0
 FRAME_TYPE_ERROR = 1
 FRAME_TYPE_MESSAGE = 2
 
-# commmands
+# commands
 AUTH = b'AUTH'
 FIN = b'FIN'  # success
 IDENTIFY = b'IDENTIFY'

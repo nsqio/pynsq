@@ -30,7 +30,7 @@ class BackoffTimer(object):
         self.update_interval()
 
     def success(self):
-        """Update the timer to reflect a successfull call"""
+        """Update the timer to reflect a successful call"""
         if self.interval == 0.0:
             return
         self.short_interval -= self.short_unit
