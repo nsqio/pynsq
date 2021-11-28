@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1 - 2021-11-28
+
+ * #254 - don't violate max-in-flight on new connections
+
 ## 0.9.0 - 2020-07-25
 
  * #244 - tornado 6.x support, co-routine message handlers
