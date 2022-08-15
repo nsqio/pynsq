@@ -401,7 +401,7 @@ class AsyncConn(event.EventedMixin):
         self.off(event.RESPONSE, self._on_identify_response)
 
         if data == b'OK':
-            logger.warning('nsqd version does not support feature netgotiation')
+            logger.warning('nsqd version does not support feature negotiation')
             return self.trigger(event.READY, conn=self)
 
         try:
