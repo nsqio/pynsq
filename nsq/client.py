@@ -3,15 +3,16 @@ from __future__ import absolute_import
 import time
 import logging
 
-import tornado.ioloop
+from tornado.ioloop import IOLoop, PeriodicCallback
 
 logger = logging.getLogger(__name__)
 
 
 class Client(object):
     def __init__(self, **kwargs):
-        self.io_loop = tornado.ioloop.IOLoop.current()
-        tornado.ioloop.PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000).start()
+        self.io_loop = IOLoop.current()
+        self.periodic_check = PeriodicCallback(self._check_last_recv_timestamps, 60 * 1000)
+        self.periodic_check.start()
 
     def _on_connection_identify(self, conn, data, **kwargs):
         logger.info('[%s:%s] IDENTIFY sent %r' % (conn.id, self.name, data))
@@ -75,3 +76,6 @@ class Client(object):
         :param conn: the :class:`nsq.AsyncConn` over which the heartbeat was received
         """
         pass
+
+    def close(self):
+        self.periodic_check.stop()

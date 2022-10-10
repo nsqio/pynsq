@@ -221,6 +221,7 @@ class Reader(Client):
         self.backoff_block = False
         self.backoff_block_completed = True
 
+        self._closed = False
         self.conns = {}
         self.connection_attempts = {}
         self.http_client = tornado.httpclient.AsyncHTTPClient()
@@ -264,14 +265,18 @@ class Reader(Client):
 
     def close(self):
         """
-        Closes all connections stops all periodic callbacks
+        Closes all connections and stops all periodic callbacks
         """
+        self._closed = True
+
         for conn in self.conns.values():
             conn.close()
 
         self.redist_periodic.stop()
         if self.query_periodic is not None:
             self.query_periodic.stop()
+
+        super(Reader, self).close()
 
     def set_message_handler(self, message_handler):
         """
@@ -499,8 +504,8 @@ class Reader(Client):
         # only attempt to re-connect once every 10s per destination
         # this throttles reconnects to failed endpoints
         now = time.time()
-        last_connect_attempt = self.connection_attempts.get(conn.id)
-        if last_connect_attempt and last_connect_attempt > now - 10:
+        last_connect_attempt = self.connection_attempts.get(conn.id, 0)
+        if last_connect_attempt > now - 10:
             return
         self.connection_attempts[conn.id] = now
 
@@ -564,6 +569,9 @@ class Reader(Client):
         if conn.rdy_timeout:
             self.io_loop.remove_timeout(conn.rdy_timeout)
             conn.rdy_timeout = None
+
+        if self._closed:
+            return
 
         if not self.lookupd_http_addresses:
             # automatically reconnect to nsqd addresses when not using lookupd
